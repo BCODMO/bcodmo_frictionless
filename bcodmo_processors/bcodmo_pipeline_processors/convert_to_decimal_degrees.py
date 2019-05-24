@@ -26,11 +26,13 @@ def modify_datapackage(datapackage_):
 
 
 def process_resource(rows, missing_data_values):
+    row_counter = 0
     for row in rows:
+        row_counter += 1
         for field in fields:
             input_field = field['input_field']
             if input_field not in row:
-                raise Exception(f'Input field {input_field} not found in row')
+                raise Exception(f'Input field {input_field} not found in row {row_counter}: {row}')
             row_value = row[input_field]
             output_field = field['output_field']
 
@@ -48,7 +50,7 @@ def process_resource(rows, missing_data_values):
             match = re.search(pattern, row_value)
             # Ensure there is a match
             if not match:
-                raise Exception(f'Match not found for expression \"{pattern}\" and value \"{row_value}\"')
+                raise Exception(f'Match not found for expression \"{pattern}\" and value \"{row_value}\" at row {row_counter}')
 
             # Get the degrees value
             try:
@@ -56,7 +58,7 @@ def process_resource(rows, missing_data_values):
             except IndexError:
                 raise Exception(f'The degrees group is required in the expression \"{pattern}\"')
             except ValueError:
-                raise Exception(f'Couldn\'t convert "{match.group("degrees")}" to a number: from line "{row_value}"')
+                raise Exception(f'Couldn\'t convert "{match.group("degrees")}" to a number: from line "{row_value}" at row {row_counter}')
 
             # Get the directional value
             if directional in field:
@@ -77,7 +79,7 @@ def process_resource(rows, missing_data_values):
                 except IndexError:
                     raise Exception(f'The minutes group is required in the expression \"{pattern}\"')
                 except ValueError:
-                    raise Exception(f'Couldn\'t convert "{match.group("minutes")}" to a number: from line "{row_value}"')
+                    raise Exception(f'Couldn\'t convert "{match.group("minutes")}" to a number: from line "{row_value}" at row {row_counter}')
 
                 # Get the seconds value
                 try:
@@ -85,10 +87,10 @@ def process_resource(rows, missing_data_values):
                 except IndexError:
                     raise Exception(f'The seconds group is required in the expression \"{pattern}\"')
                 except ValueError:
-                    raise Exception(f'Couldn\'t convert "{match.group("seconds")}" to a number: from line "{row_value}"')
+                    raise Exception(f'Couldn\'t convert "{match.group("seconds")}" to a number: from line "{row_value}" at {row_counter}')
 
                 if seconds >= 60:
-                    raise Exception(f'Seconds are greater than 60: {seconds}')
+                    raise Exception(f'Seconds are greater or equal to 60 at row {row_counter}: {seconds}')
                 decimal_minutes = minutes + (seconds / 60)
 
             # Input is degrees, decimal seconds
@@ -99,10 +101,10 @@ def process_resource(rows, missing_data_values):
                 except IndexError:
                     raise Exception(f'The decimal_minutes group is required in the expression \"{pattern}\"')
                 except ValueError:
-                    raise Exception(f'Couldn\'t convert "{match.group("decimal_minutes")}" to a number: from line "{row_value}"')
+                    raise Exception(f'Couldn\'t convert "{match.group("decimal_minutes")}" to a number: from line "{row_value}" at row {row_counter}')
 
             if decimal_minutes >= 60:
-                raise Exception(f'Decimal minutes are greater than 60: {decimal_minutes}')
+                raise Exception(f'Decimal minutes are greater or equal to 60 at row{row_counter}: {decimal_minutes}')
 
             if degrees < 0:
                 decimal_degrees = degrees - (decimal_minutes / 60)
