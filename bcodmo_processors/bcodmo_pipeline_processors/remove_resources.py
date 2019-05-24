@@ -21,12 +21,16 @@ def remove_resources(
         package.pkg.descriptor['resources'] = new_resources
         yield package.pkg
 
-        it = iter(package)
-        for resource in it:
+        res_list = []
+        for resource in package:
             if matcher.match(resource.res.name):
-                pass
+                for row in resource:
+                    # Make sure the iterator gets all the way through all of the rows before moving on
+                    pass
             else:
-                yield resource
+                res_list.append(resource)
+        for r in res_list:
+            yield r
 
     return func
 
