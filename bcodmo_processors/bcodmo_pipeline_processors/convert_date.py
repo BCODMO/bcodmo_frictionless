@@ -84,7 +84,7 @@ def process_resource(rows, missing_data_values):
                 date_obj = datetime.strptime(row_value, input_format)
                 if not date_obj.tzinfo:
                     if not input_timezone:
-                        raise Exception('Date string at row {row_counter} does not contain timezone information and timezone was not inputed')
+                        raise Exception(f'Date string at row {row_counter} does not contain timezone information and timezone was not inputed')
                     if input_timezone == 'UTC' and input_timezone_utc_offset:
                         # Handle UTC offset timezones differently
                         date_obj = date_obj.replace(tzinfo=tzoffset('UTC', input_timezone_utc_offset * 60 * 60))
@@ -130,7 +130,7 @@ def process_resource(rows, missing_data_values):
                 try:
                     row_value = float(row_value)
                 except ValueError:
-                    raise Exception('Row value {row_value} at row {row_counter} could not be converted to a number')
+                    raise Exception(f'Row value {row_value} at row {row_counter} could not be converted to a number')
                 date_obj = EXCEL_START_DATE + timedelta(days=row_value)
                 output_date_string = date_obj.strftime(output_format)
                 row[output_field] = output_date_string
