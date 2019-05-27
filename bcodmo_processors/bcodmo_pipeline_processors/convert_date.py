@@ -44,7 +44,6 @@ def process_resource(rows, missing_data_values):
                 raise Exception('Output format is required')
 
             if 'input_type' not in field or field['input_type'] == 'python':
-                logger.info('Hello in here')
                 row_value = None
                 # Support multiple input fields
                 if 'input_fields' in field:
@@ -76,16 +75,23 @@ def process_resource(rows, missing_data_values):
                 input_timezone_utc_offset = field.get('input_timezone_utc_offset', None)
                 output_timezone = field.get('output_timezone', None)
                 output_timezone_utc_offset = field.get('output_timezone_utc_offset', None)
-                if not output_timezone:
-                    output_timezone = 'UTC'
+
 
                 year = field.get('year', None)
 
                 date_obj = datetime.strptime(row_value, input_format)
+                logger.info(f'inputtimezone: {input_timezone}, {bool(input_timezone)}')
                 if not date_obj.tzinfo:
                     if not input_timezone:
-                        raise Exception(f'Date string at row {row_counter} does not contain timezone information and timezone was not inputed')
-                    if input_timezone == 'UTC' and input_timezone_utc_offset:
+                        if '%Z' in output_format:
+                            raise Exception(
+                                f'%Z cannot be in the output format if timezone information is not inputted'
+                            )
+                        if output_timezone:
+                            raise Exception(
+                                f'Output timezone cannot be inputted without input timezone information'
+                            )
+                    elif input_timezone == 'UTC' and input_timezone_utc_offset:
                         # Handle UTC offset timezones differently
                         date_obj = date_obj.replace(tzinfo=tzoffset('UTC', input_timezone_utc_offset * 60 * 60))
                     else:
@@ -94,7 +100,9 @@ def process_resource(rows, missing_data_values):
 
                 if year:
                     date_obj = date_obj.replace(year=int(year))
-                if output_timezone == 'UTC' and output_timezone_utc_offset:
+                if not output_timezone:
+                    output_date_string = date_obj.strftime(output_format)
+                elif output_timezone == 'UTC' and output_timezone_utc_offset:
                     # Handle UTC offset timezones differently
                     output_date_string = date_obj.astimezone(
                         tzoffset('UTC', output_timezone_utc_offset * 60 * 60)
