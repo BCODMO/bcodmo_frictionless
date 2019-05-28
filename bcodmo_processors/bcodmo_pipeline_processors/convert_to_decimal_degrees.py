@@ -115,7 +115,7 @@ def process_resource(rows, missing_data_values):
             if (directional == 'W' or directional == 'S') and decimal_degrees >= 0:
                 decimal_degrees *= -1
 
-            row[output_field] = decimal_degrees
+            row[output_field] = str(decimal_degrees)
 
         yield row
 
