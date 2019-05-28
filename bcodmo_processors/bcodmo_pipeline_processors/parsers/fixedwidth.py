@@ -91,4 +91,6 @@ class FixedWidthParser(Parser):
             for index, row in chunk.iterrows():
                 if index == 0:
                     yield (1, None, list(chunk))
-                yield (index + 2, None, row.tolist())
+                l = row.tolist()
+                l = [str(item) for item in l]
+                yield (index + 2, None, l)
