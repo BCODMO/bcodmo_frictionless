@@ -1,3 +1,4 @@
+import sys
 from datapackage_pipelines.wrapper import ingest, spew
 from dataflows.helpers.resource_matcher import ResourceMatcher
 import logging
@@ -9,18 +10,26 @@ fields = parameters.get('fields', [])
 
 
 def process_resource(rows, missing_data_values):
+    row_counter = 0
     for row in rows:
-        for field in fields:
-            orig_val = row[field['name']]
-            if orig_val in missing_data_values or orig_val is None:
-                row[field['name']] = orig_val
-                continue
-            rounded_val = round(float(orig_val), int(field['digits']))
-            # Convert the rounded val back to the original type
-            new_val = type(orig_val)(rounded_val)
+        row_counter += 1
+        try:
+            for field in fields:
+                orig_val = row[field['name']]
+                if orig_val in missing_data_values or orig_val is None:
+                    row[field['name']] = orig_val
+                    continue
+                rounded_val = round(float(orig_val), int(field['digits']))
+                # Convert the rounded val back to the original type
+                new_val = type(orig_val)(rounded_val)
 
-            row[field['name']] = new_val
-        yield row
+                row[field['name']] = new_val
+            yield row
+        except Exception as e:
+            raise type(e)(
+                str(e) +
+                f' at row {row_counter}'
+            ).with_traceback(sys.exc_info()[2])
 
 
 def process_resources(resource_iterator_):

@@ -1,3 +1,4 @@
+import sys
 from dataflows import Flow, update_resource
 from datapackage_pipelines.wrapper import ingest
 from datapackage_pipelines.utilities.resources import PROP_STREAMING
@@ -13,20 +14,29 @@ def concatenator(resources, all_target_fields, field_mapping, include_source_nam
         res_name = resource_.res.name
         path_name = resource_.res._Resource__current_descriptor['dpp:streamedFrom']
         file_name = os.path.basename(path_name)
+        row_counter = 0
         for row in resource_:
-            processed = dict((k, '') for k in all_target_fields)
-            values = [(field_mapping[k], v) for (k, v)
-                    in row.items()
-                    if k in field_mapping]
-            assert len(values) > 0
-            processed.update(dict(values))
-            if include_source_name == 'resource':
-                processed[source_field_name] = res_name
-            if include_source_name == 'path':
-                processed[source_field_name] = path_name
-            if include_source_name == 'file':
-                processed[source_field_name] = file_name
-            yield processed
+            row_counter += 1
+            try:
+                processed = dict((k, '') for k in all_target_fields)
+                values = [(field_mapping[k], v) for (k, v)
+                        in row.items()
+                        if k in field_mapping]
+                assert len(values) > 0
+                processed.update(dict(values))
+                if include_source_name == 'resource':
+                    processed[source_field_name] = res_name
+                if include_source_name == 'path':
+                    processed[source_field_name] = path_name
+                if include_source_name == 'file':
+                    processed[source_field_name] = file_name
+                yield processed
+            except Exception as e:
+                raise type(e)(
+                    str(e) +
+                    f' at row {row_counter}'
+                ).with_traceback(sys.exc_info()[2])
+
 
 
 def concatenate(

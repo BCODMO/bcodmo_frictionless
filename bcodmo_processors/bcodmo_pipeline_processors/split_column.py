@@ -1,3 +1,4 @@
+import sys
 from datapackage_pipelines.wrapper import ingest, spew
 from dataflows.helpers.resource_matcher import ResourceMatcher
 import logging
@@ -39,38 +40,46 @@ def modify_datapackage(datapackage_):
 
 
 def process_resource(rows, missing_data_values):
+    row_counter = 0
     for row in rows:
-        for field in fields:
-            input_field = field['input_field']
-            if input_field not in row:
-                raise Exception(f'Input field {input_field} not found in row')
-            row_value = row[input_field]
-            output_fields = field['output_fields']
+        row_counter += 1
+        try:
+            for field in fields:
+                input_field = field['input_field']
+                if input_field not in row:
+                    raise Exception(f'Input field {input_field} not found in row')
+                row_value = row[input_field]
+                output_fields = field['output_fields']
 
-            if row_value in missing_data_values or row_value is None:
-                for output_field in output_fields:
-                    row[output_field] = row_value
-                continue
+                if row_value in missing_data_values or row_value is None:
+                    for output_field in output_fields:
+                        row[output_field] = row_value
+                    continue
 
 
-            pattern = field['pattern']
-            match = re.search(pattern, row_value)
-            # Ensure there is a match
-            if not match:
-                raise Exception(f'Match not found for expression \"{pattern}\" and value \"{row_value}\"')
-            groups = match.groups()
-            if len(groups) != len(output_fields):
-                raise Exception(
-                    f'Found a different number of matches to the number of output fields: "{groups}" and "{output_fields}"'
-                )
-            for index in range(len(groups)):
-                string = groups[index]
-                output_field = output_fields[index]
-                row[output_field] = string
-            if delete_input:
-                del row[input_field]
+                pattern = field['pattern']
+                match = re.search(pattern, row_value)
+                # Ensure there is a match
+                if not match:
+                    raise Exception(f'Match not found for expression \"{pattern}\" and value \"{row_value}\"')
+                groups = match.groups()
+                if len(groups) != len(output_fields):
+                    raise Exception(
+                        f'Found a different number of matches to the number of output fields: "{groups}" and "{output_fields}"'
+                    )
+                for index in range(len(groups)):
+                    string = groups[index]
+                    output_field = output_fields[index]
+                    row[output_field] = string
+                if delete_input:
+                    del row[input_field]
 
-        yield row
+            yield row
+        except Exception as e:
+            raise type(e)(
+                str(e) +
+                f' at row {row_counter}'
+            ).with_traceback(sys.exc_info()[2])
 
 
 def process_resources(resource_iterator_):

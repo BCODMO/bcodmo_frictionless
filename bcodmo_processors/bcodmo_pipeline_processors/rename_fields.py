@@ -1,3 +1,4 @@
+import sys
 from datapackage_pipelines.wrapper import ingest, spew
 from dataflows.helpers.resource_matcher import ResourceMatcher
 import logging
@@ -29,16 +30,24 @@ def modify_datapackage(datapackage_):
     return datapackage_
 
 def process_resource(rows):
+    row_counter = 0
     for row in rows:
-        for field in fields:
-            old_field_name = field['old_field']
-            new_field_name = field['new_field']
-            if new_field_name in row:
-                raise Exception(f'New field name {new_field_name} already exists in row {row.keys()}')
-            value = row[old_field_name]
-            row[new_field_name] = value
-            del row[old_field_name]
-        yield row
+        row_counter += 1
+        try:
+            for field in fields:
+                old_field_name = field['old_field']
+                new_field_name = field['new_field']
+                if new_field_name in row:
+                    raise Exception(f'New field name {new_field_name} already exists in row {row.keys()}')
+                value = row[old_field_name]
+                row[new_field_name] = value
+                del row[old_field_name]
+            yield row
+        except Exception as e:
+            raise type(e)(
+                str(e) +
+                f' at row {row_counter}'
+            ).with_traceback(sys.exc_info()[2])
 
 
 def process_resources(resource_iterator_):
