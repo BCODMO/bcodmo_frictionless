@@ -29,10 +29,10 @@ class PathDumper(FileDumper):
             return
         path_part = os.path.dirname(path)
         PathDumper.__makedirs(path_part)
+        os.chmod(path_part, 0o775)
         shutil.copy(filename, path)
         # Change file and folder permissions to 775
         os.chmod(path, 0o775)
-        os.chmod(path_part, 0o775)
         return path
 
     def handle_datapackage(self):
@@ -48,7 +48,10 @@ class PathDumper(FileDumper):
 
         '''
         if self.save_pipeline_spec:
-            path = os.path.realpath('./pipeline-spec.yaml')
+            # Use original suffix to get the pipeline-spec without the last dump
+            path = os.path.realpath('./pipeline-spec.yaml.original')
+            if not os.path.exists(path):
+                path = os.path.realpath('./pipeline-spec.yaml')
             try:
                 self.write_file_to_output(path, 'pipeline-spec.yaml')
             except Exception as e:
