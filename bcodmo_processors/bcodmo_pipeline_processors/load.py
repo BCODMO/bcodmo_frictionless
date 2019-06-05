@@ -43,8 +43,8 @@ def flow(parameters, datapackage):
 
     params = []
     _name = parameters.pop('name', '')
-    name_len = len(_name.split(','))
-    from_len = len(_from.split(','))
+    name_len = len(_name.split(_input_seperator))
+    from_len = len(_from.split(_input_seperator))
     if _name and name_len is not from_len:
         raise Exception(
             f'The comma seperated list of names has length {name_len} and the list of urls has length {from_len}. They must be equal'
@@ -62,7 +62,7 @@ def flow(parameters, datapackage):
         names = _name.split(_input_seperator)
 
     # Get comma seperated file names/urls
-    for i, url in enumerate(_from.split(',')):
+    for i, url in enumerate(_from.split(_input_seperator)):
         # Default the name to res[1-n]
         resource_name = names[i]
 
