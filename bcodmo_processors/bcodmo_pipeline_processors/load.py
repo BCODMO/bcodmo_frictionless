@@ -14,7 +14,7 @@ custom_parsers = {
 
 def flow(parameters, datapackage):
     _from = parameters.pop('from')
-    _input_seperator = parameters.pop('input_seperator', ',')
+    _input_separator = parameters.pop('input_separator', ',')
     # Grab missing_values from the parameters
     _missing_values = parameters.pop('missing_values', [''])
 
@@ -43,8 +43,8 @@ def flow(parameters, datapackage):
 
     params = []
     _name = parameters.pop('name', '')
-    name_len = len(_name.split(_input_seperator))
-    from_len = len(_from.split(_input_seperator))
+    name_len = len(_name.split(_input_separator))
+    from_len = len(_from.split(_input_separator))
     if _name and name_len is not from_len:
         raise Exception(
             f'The comma seperated list of names has length {name_len} and the list of urls has length {from_len}. They must be equal'
@@ -59,10 +59,10 @@ def flow(parameters, datapackage):
                 resource_name = f'res{resource_name_num}'
             names.append(resource_name)
     else:
-        names = _name.split(_input_seperator)
+        names = _name.split(_input_separator)
 
     # Get comma seperated file names/urls
-    for i, url in enumerate(_from.split(_input_seperator)):
+    for i, url in enumerate(_from.split(_input_separator)):
         # Default the name to res[1-n]
         resource_name = names[i]
 
