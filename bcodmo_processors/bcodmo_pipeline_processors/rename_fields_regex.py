@@ -1,4 +1,5 @@
 import re
+import sys
 
 from datapackage_pipelines.wrapper import ingest, spew
 from dataflows.helpers.resource_matcher import ResourceMatcher
@@ -36,20 +37,28 @@ def modify_datapackage(datapackage_):
 
 def process_resource(rows):
     pattern = parameters.get('pattern', {})
+    row_counter = 0
     for row in rows:
-        for field in fields:
-            new_field_name = re.sub(
-                str(pattern['find']),
-                str(pattern['replace']),
-                str(field),
-            )
-            if new_field_name is not field and new_field_name in row:
-                raise Exception(f'New field name {new_field_name} already exists in row {row.keys()}')
-            logger.info(row)
-            value = row[field]
-            del row[field]
-            row[new_field_name] = value
-        yield row
+        row_counter += 1
+        try:
+            for field in fields:
+                new_field_name = re.sub(
+                    str(pattern['find']),
+                    str(pattern['replace']),
+                    str(field),
+                )
+                if new_field_name is not field and new_field_name in row:
+                    raise Exception(f'New field name {new_field_name} already exists in row {row.keys()}')
+                logger.info(row)
+                value = row[field]
+                del row[field]
+                row[new_field_name] = value
+            yield row
+        except Exception as e:
+            raise type(e)(
+                str(e) +
+                f' at row {row_counter}'
+            ).with_traceback(sys.exc_info()[2])
 
 
 def process_resources(resource_iterator_):

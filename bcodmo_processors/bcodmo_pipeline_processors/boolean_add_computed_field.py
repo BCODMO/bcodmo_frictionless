@@ -1,3 +1,4 @@
+import sys
 import functools
 import collections
 import logging
@@ -33,7 +34,7 @@ expr = pp.operatorPrecedence(
     ],
 )
 
-def parse_pyparser_result(res, row):
+def parse_pyparser_result(row_counter, res, row):
     ''' Parse a result from pyparser '''
     if type(res) == bool:
         return res
@@ -54,13 +55,12 @@ def parse_pyparser_result(res, row):
                     return 0
                 return parser.parse(val)
             except ValueError:
-                raise ValueError
-                raise Exception(f'Failed to parse {res} into a valid number or date: {res.format(**row)}')
+                raise Exception(f'Failed to parse {res} into a valid number or date at row {row_counter}: {res.format(**row)}')
 
     if len(res) == 0:
         return False
     if len(res) == 1:
-        return parse_pyparser_result(res[0], row)
+        return parse_pyparser_result(row_counter, res[0], row)
     first_value = None
     operation = None
     try:
@@ -70,8 +70,8 @@ def parse_pyparser_result(res, row):
             elif not operation:
                 operation = term
             else:
-                first_parsed = parse_pyparser_result(first_value, row)
-                second_parsed = parse_pyparser_result(term, row)
+                first_parsed = parse_pyparser_result(row_counter, first_value, row)
+                second_parsed = parse_pyparser_result(row_counter, term, row)
 
                 if operation == '>':
                     first_value = first_parsed > second_parsed
@@ -92,6 +92,7 @@ def parse_pyparser_result(res, row):
                 operation = None
     except TypeError as e:
         raise e
+
     return first_value
 
 
@@ -119,22 +120,30 @@ def process_resource(rows):
             field_functions[index].append(
                 expr.parseString(boolean_string)
             )
+    row_counter = 0
     for row in rows:
-        for field_index in range(len(fields)):
-            field = fields[field_index]
+        row_counter += 1
+        try:
+            for field_index in range(len(fields)):
+                field = fields[field_index]
 
-            functions = field.get('functions', [])
-            for func_index in range(len(functions)):
-                function = functions[func_index]
-                expression = field_functions[field_index][func_index]
+                functions = field.get('functions', [])
+                for func_index in range(len(functions)):
+                    function = functions[func_index]
+                    expression = field_functions[field_index][func_index]
 
-                value_ = function.get('value', '')
-                new_col = value_.format(**row)
+                    value_ = function.get('value', '')
+                    new_col = value_.format(**row)
 
-                expression_true = parse_pyparser_result(expression, row)
-                if expression_true:
-                    row[field['target']] = new_col
-        yield row
+                    expression_true = parse_pyparser_result(row_counter, expression, row)
+                    if expression_true:
+                        row[field['target']] = new_col
+            yield row
+        except Exception as e:
+            raise type(e)(
+                str(e) +
+                f' at row {row_counter}'
+            ).with_traceback(sys.exc_info()[2])
 
 
 def process_resources(resource_iterator_):
