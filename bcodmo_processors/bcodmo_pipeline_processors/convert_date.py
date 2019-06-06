@@ -46,32 +46,35 @@ def process_resource(rows, missing_data_values):
                     raise Exception('Output format is required')
 
                 if 'input_type' not in field or field['input_type'] == 'python':
-                    row_value = None
+                    row_value = ''
+                    input_format = ''
                     # Support multiple input fields
-                    if 'input_fields' in field:
-                        input_fields = field['input_fields']
-                        for input_field in input_fields:
+                    if 'inputs' in field:
+                        inputs = field['inputs']
+                        for input_d in inputs:
+                            input_field = input_d['field']
                             if input_field not in row:
                                 raise Exception(f'Input field {input_field} not found: {row}')
-                        row_value = ' '.join([
-                            row[input_field] for input_field in input_fields
-                            if row[input_field] and row[input_field] not in missing_data_values
-                        ])
+                            if row[input_field] not in missing_data_values:
+                                row_value += f' {row[input_field]}'
+                                input_format += f' {input_d["format"]}'
                     # Backwards compatability with a single input field
                     elif 'input_field' in field:
                         input_field = field['input_field']
                         if input_field not in row:
                             raise Exception(f'Input field {input_field} not found: {row}')
                         row_value = row[input_field]
+                        if 'input_format' not in field:
+                            raise Exception('If using depecrated input_field for python input_type you must pass in input_format')
+                        input_format = field['input_format']
                     else:
-                        raise Exception('One of input_field or input_fields is required')
+                        raise Exception('One of input_field or inputs is required')
 
                     if row_value in missing_data_values or row_value is None:
                         row[output_field] = row_value
                         continue
                     row_value = str(row_value)
 
-                    input_format = field['input_format']
 
                     input_timezone = field.get('input_timezone', None)
                     input_timezone_utc_offset = field.get('input_timezone_utc_offset', None)
