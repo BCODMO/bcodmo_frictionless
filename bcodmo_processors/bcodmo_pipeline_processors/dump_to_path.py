@@ -29,10 +29,18 @@ class PathDumper(FileDumper):
             return
         path_part = os.path.dirname(path)
         PathDumper.__makedirs(path_part)
-        os.chmod(path_part, 0o775)
+        try:
+            # Try to change the permissions
+            os.chmod(path_part, 0o775)
+        except:
+            pass
         shutil.copy(filename, path)
         # Change file and folder permissions to 775
-        os.chmod(path, 0o775)
+        try:
+            # Try to change the permissions
+            os.chmod(path, 0o775)
+        except:
+            pass
         return path
 
     def handle_datapackage(self):
