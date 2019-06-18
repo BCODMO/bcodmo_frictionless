@@ -34,13 +34,19 @@ class PathDumper(FileDumper):
             os.chmod(path_part, 0o775)
         except:
             pass
-        shutil.copy(filename, path)
+        temp_name = os.path.join(path_part, 'temp')
+        shutil.copy(filename, temp_name)
+        # Remove carraige endings by saving as new file with \n
+        with open(temp_name, 'r') as inf, open(path, "w+", newline="\n") as outf:
+            outf.writelines(inf)
+        os.remove(temp_name)
         # Change file and folder permissions to 775
         try:
             # Try to change the permissions
             os.chmod(path, 0o775)
         except:
             pass
+
         return path
 
     def handle_datapackage(self):
