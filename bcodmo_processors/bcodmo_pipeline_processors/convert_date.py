@@ -58,6 +58,12 @@ def process_resource(rows, missing_data_values):
                             if row[input_field] not in missing_data_values:
                                 row_value += f' {row[input_field]}'
                                 input_format += f' {input_d["format"]}'
+                            else:
+                                # There is a value in missing_data_values
+                                # per discussion with data managers, set entire row to None
+                                row_value = None
+                                break
+
                     # Backwards compatability with a single input field
                     elif 'input_field' in field:
                         input_field = field['input_field']
