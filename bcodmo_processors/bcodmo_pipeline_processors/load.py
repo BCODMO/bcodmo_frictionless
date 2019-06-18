@@ -17,6 +17,7 @@ def flow(parameters, datapackage):
     _input_separator = parameters.pop('input_separator', ',')
     # Grab missing_values from the parameters
     _missing_values = parameters.pop('missing_values', [''])
+    _remove_empty_rows = parameters.pop('remove_empty_rows', False)
 
     num_resources = 0
 
@@ -39,7 +40,23 @@ def flow(parameters, datapackage):
             yield from package
         return func
 
+    def remove_empty_rows(name):
+        def func(package):
+            yield package.pkg
+            def process_resource(rows):
+                for row in rows:
+                    for value in row.values():
+                        if value:
+                            # Only yield if something in the row has a value
+                            yield row
+                            break
 
+            for r in package:
+                if r.res.name == name:
+                    yield process_resource(r)
+                else:
+                    yield r
+        return func
 
     params = []
     _name = parameters.pop('name', '')
@@ -70,6 +87,8 @@ def flow(parameters, datapackage):
             load(url, custom_parsers = custom_parsers, name = resource_name, **parameters),
             mark_streaming(url, resource_name),
         ])
+        if _remove_empty_rows:
+            params.append(remove_empty_rows(resource_name))
 
     return Flow(
         count_resources(),
