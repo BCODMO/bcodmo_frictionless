@@ -61,7 +61,7 @@ _Parameters_:
 - All parameters from the [standard processor dump_to_path](https://github.com/frictionlessdata/datapackage-pipelines#dump_to_path)
 - `save_pipeline_spec` - whether or not the pipeline_spec.yaml file should also be saved in dump_to_path. Note that the entire pipeline's pipeline-spec.yaml file will be saved, regardless of where in the pipeline the dump_to_path processor lives.
 
-_Other differences from the standard load_:
+_Other differences from the standard dump_to_path_:
 
 - an attempt is made to change file permissions to 775 
 - carriage return \r at line endings are removed
@@ -74,6 +74,7 @@ Add a field computed using boolean values.
 
 _Parameters_:
 
+- `resources` - a list of resources to perform this operation on
 - `fields` - a list of new_fields
   - `functions` - a list of functions for the new field
     - `boolean`- boolean string for this function. See notes for details on boolean string
@@ -94,13 +95,14 @@ Convert any number of fields containing date information into a single date fiel
 
 _Parameters_:
 
+- `resources` - a list of resources to perform this operation on
 - `fields` - a list of new_fields
   - `output_field` - the name of the output field
   - `output_format` - the python datetime format string for the output field
   - `input_type` - the input field type. One of 'python' or 'excel'. If 'python', evaluate the input field/fields using python format strings. If 'excel', only take in a single input field and evaluate it as an excel date serial number.
   - `input_field` - a single input field. Only use if `input_type` is 'excel'. Depecrated if `input_type` is 'python'. 
 
-   ***`the rest of the parameters are only relevant if input_type is 'python'`***
+   ***the rest of the parameters are only relevant if input_type is 'python'***
   - `inputs` - a list of input fields
     - `field` - the input field name
     - `format` - the format of this input field
@@ -113,5 +115,128 @@ _Parameters_:
 
 _Notes_:
 
-- 
+- The output type is string until the [date type dump_to_path issue](https://github.com/BCODMO/frictionless-usecases/issues/19) is resolved 
 
+### ***`bcodmo_pipeline_processors.convert_to_decimal_degrees`***
+
+Convert a single field containing coordinate information from degrees-minutes-seconds or degrees-decimal_minutes to decimal_degrees.
+
+_Parameters_:
+
+- `resources` - a list of resources to perform this operation on
+- `fields` - a list of new_fields
+  - `input_field` - the name of the input field 
+  - `output_field` - the name of the output field
+  - `input_format` - the input format. One of 'degrees-minutes-seconds' or 'degrees-decimal_minutes'
+  - `pattern` - the pattern for the input field. See notes for details
+  - `directional` - the directional of the coordinate. Must be one of 'N', 'E', 'S', 'W'
+
+
+_Notes_:
+
+- `pattern` is made up of [python regular expression named groups](https://docs.python.org/3/howto/regex.html#non-capturing-and-named-groups). The possible group names are 'directional', 'degrees', 'minutes', 'seconds', and 'decimal_minutes'. If the `input_format` is 'degrees-minutes-seconds' the groups 'degrees', 'minutes' and 'seconds' are required. If the `input_format` is 'degrees-decimal_minutes' the groups 'degrees' and 'decimal_minutes' are required. The 'directional'
+  group is always optional.
+- if 'directional' is passed in both through the `pattern` and the `directional` parameter, the `directional` parameter takes precendence.
+
+### ***`bcodmo_pipeline_processors.remove_resources`***
+
+Remove any number of resources from the pipeline
+
+_Parameters_:
+
+- `resources` - the resources to remove 
+
+
+### ***`bcodmo_pipeline_processors.rename_fields`***
+
+Rename any number of fields 
+
+_Parameters_:
+
+- `resources` - a list of resources to perform this operation on
+- `fields` - a list of fields
+    - `old_field` - the name of the field before it is renamed
+    - `new_field` - the new name for the field
+
+
+_Notes_:
+
+- if `new_field` already exists as a field in the resource an error will be thrown
+
+
+### ***`bcodmo_pipeline_processors.rename_fields_regex***
+
+Rename any number of fields using a regular expression
+
+_Parameters_:
+
+- `resources` - a list of resources to perform this operation on
+- `fields` - a list of fields to perform this operation on
+- `pattern` - regular expression patterns to be usedd
+    - `find` - the find pattern for the old field name
+    - `replace` - the replace pattern for the new field name 
+
+
+_Notes_:
+
+- if the field name created by `replace` already exists in the resource an error will be thrown
+- regular expressions are always python regular expressions
+
+### ***`bcodmo_pipeline_processors.rename_resource***
+
+Rename a resource
+
+_Parameters_:
+
+-`old_resource` - the old name of the resource
+-`new_resource` - the new name of the resource
+
+
+### ***`bcodmo_pipeline_processors.reorder_fields***
+
+Rename any number of fields using a regular expression
+
+_Parameters_:
+
+- `resources` - a list of resources to perform this operation on
+- `fields` - the new order of fields 
+
+_Notes_:
+
+- if a field does not exist in the resource an error will be thrown
+- if the number of passed in fields does not match the number of fields in the resource an error will be thrown
+
+
+### ***`bcodmo_pipeline_processors.round_fields***
+
+Round any number of fields
+
+_Parameters_:
+
+- `resources` - a list of resources to perform this operation on
+- `fields` - a list of fields to perform this operation on 
+    - `name` - the name of the field to round
+    - `digits` - the number of digits to round the field to
+
+_Notes_:
+
+- round_fields works on both string and number types, and the type of the field will stay the same
+- if attempted to use on a string type that can't be temporarily converted to a number an error will be thrown
+
+### ***`bcodmo_pipeline_processors.split_column***
+
+Split a field into any number of other fields
+
+_Parameters_:
+
+- `resources` - a list of resources to perform this operation on
+- `fields` - a list of fields to perform this operation on 
+    - `input_field` - the name of the field to split 
+    - `output_fields` - the names of the output fields
+    - `pattern` - the pattern to match the input_field. Use python regular expression matches (denoted by parentheses) to capture values for `output_fields` 
+- `delete_input` - whether the `input_field` should be deleted after the `output_fields` are created
+
+_Notes_:
+
+- all new fields will be typed as strings 
+- the number of matches in `pattern` must equal the number of output fields in `output_fields`
