@@ -164,7 +164,7 @@ _Notes_:
 - if `new_field` already exists as a field in the resource an error will be thrown
 
 
-### ***`bcodmo_pipeline_processors.rename_fields_regex***
+### ***`bcodmo_pipeline_processors.rename_fields_regex`***
 
 Rename any number of fields using a regular expression
 
@@ -182,7 +182,7 @@ _Notes_:
 - if the field name created by `replace` already exists in the resource an error will be thrown
 - regular expressions are always python regular expressions
 
-### ***`bcodmo_pipeline_processors.rename_resource***
+### ***`bcodmo_pipeline_processors.rename_resource`***
 
 Rename a resource
 
@@ -192,7 +192,7 @@ _Parameters_:
 -`new_resource` - the new name of the resource
 
 
-### ***`bcodmo_pipeline_processors.reorder_fields***
+### ***`bcodmo_pipeline_processors.reorder_fields`***
 
 Rename any number of fields using a regular expression
 
@@ -207,7 +207,7 @@ _Notes_:
 - if the number of passed in fields does not match the number of fields in the resource an error will be thrown
 
 
-### ***`bcodmo_pipeline_processors.round_fields***
+### ***`bcodmo_pipeline_processors.round_fields`***
 
 Round any number of fields
 
@@ -223,7 +223,7 @@ _Notes_:
 - round_fields works on both string and number types, and the type of the field will stay the same
 - if attempted to use on a string type that can't be temporarily converted to a number an error will be thrown
 
-### ***`bcodmo_pipeline_processors.split_column***
+### ***`bcodmo_pipeline_processors.split_column`***
 
 Split a field into any number of other fields
 
