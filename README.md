@@ -2,7 +2,7 @@
 Custom datapackage-pipelines processors for BCODMO
 
 To run the dpp command locally using the custom processors located in this repository, simply clone this reposistory and add the environment variable DPP_PROCESSOR_PATH.
-If this repository is located at $PROCESSOR_REPO, the environment variable will be $GENERATOR_REPO/bcodmo_processors.
+If this repository is located at $PROCESSOR_REPO, the environment variable will be $PROCESSOR_REPO/bcodmo_processors.
 
 You can add environment variables manually using export DPP_PROCESSOR_PATH=$PUT_PATH_HERE or you can place all of your environment variables in a .env file and run the following commands:
 ```
