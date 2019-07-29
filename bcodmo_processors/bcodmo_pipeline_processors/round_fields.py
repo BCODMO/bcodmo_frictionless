@@ -21,7 +21,7 @@ def process_resource(rows, missing_data_values):
                     continue
                 rounded_val = round(float(orig_val), int(field['digits']))
                 # Convert the rounded val back to the original type
-                new_val = type(orig_val)(rounded_val)
+                new_val = type(orig_val)(str(rounded_val))
 
                 row[field['name']] = new_val
             yield row
