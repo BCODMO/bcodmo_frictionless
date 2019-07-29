@@ -15,8 +15,6 @@ custom_parsers = {
 def flow(parameters, datapackage):
     _from = parameters.pop('from')
     _input_separator = parameters.pop('input_separator', ',')
-    # Grab missing_values from the parameters
-    _missing_values = parameters.pop('missing_values', [''])
     _remove_empty_rows = parameters.pop('remove_empty_rows', False)
 
     num_resources = 0
@@ -33,7 +31,6 @@ def flow(parameters, datapackage):
         def func(package):
             for i in range(num_resources, len(package.pkg.resources)):
                 if package.pkg.descriptor['resources'][i]['name'] == _name:
-                    package.pkg.descriptor['resources'][i]['schema']['missingValues'] = _missing_values
                     package.pkg.descriptor['resources'][i][PROP_STREAMING] = True
                     package.pkg.descriptor['resources'][i][PROP_STREAMED_FROM] = _from
             yield package.pkg
