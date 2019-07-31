@@ -112,10 +112,20 @@ def modify_datapackage(datapackage_):
         if resources.match(resource_['name']):
             new_fields = [
                 {
-                    'name': f['target'],
-                    'type': 'string',
-                } for f in fields
+                    'name': nf['target'],
+                    'type': nf['type'],
+                } for nf in fields
             ]
+
+            def filter_old_field(field):
+                for nf in fields:
+                    if field['name'] == nf['target']:
+                        return False
+                return True
+            resource_['schema']['fields'] = list(filter(
+                filter_old_field,
+                resource_['schema']['fields'],
+            ))
             resource_['schema']['fields'] += new_fields
     return datapackage_
 
