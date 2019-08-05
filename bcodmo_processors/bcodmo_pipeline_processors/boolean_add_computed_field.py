@@ -2,107 +2,24 @@ import sys
 import functools
 import collections
 import logging
-import pyparsing as pp
 import time
-from dateutil import parser
+
+from pyparsing import ParseException
 
 from dataflows.helpers.resource_matcher import ResourceMatcher
 
 from datapackage_pipelines.wrapper import ingest, spew
 
+from boolean_add_computed_field_helper import (
+    NULL_VALUES,
+    boolean_expr, math_expr,
+    parse_boolean, parse_math
+)
+
 parameters, datapackage, resource_iterator = ingest()
 
 resources = ResourceMatcher(parameters.get('resources'), datapackage)
 fields = parameters.get('fields', [])
-
-NULL_VALUES = ['null', 'NULL', 'None', 'NONE']
-
-# Set up a language logic for parsing boolean strings
-operator = pp.Regex(">=|<=|!=|>|<|==").setName("operator")
-date = pp.Regex("(\d+[/:\- ])+(\d+)?")
-number = pp.Regex(r"[+-]?\d+(:?\.\d*)?(:?[eE][+-]?\d+)?")
-variable = pp.Regex(r"\{.*?\}")
-string = pp.Regex(r"'.*?'")
-null = pp.Regex('|'.join(NULL_VALUES))
-comparison_term = date | number | variable | string | null
-condition = pp.Group(comparison_term + operator + comparison_term)
-expr = pp.operatorPrecedence(
-    condition,
-    [
-        ("AND", 2, pp.opAssoc.LEFT, ),
-        ("and", 2, pp.opAssoc.LEFT, ),
-        ("&&", 2, pp.opAssoc.LEFT, ),
-        ("OR", 2, pp.opAssoc.LEFT, ),
-        ("or", 2, pp.opAssoc.LEFT, ),
-        ("||", 2, pp.opAssoc.LEFT, ),
-    ],
-)
-
-def parse_pyparser_result(row_counter, res, row, missing_data_values):
-    ''' Parse a result from pyparser '''
-    if type(res) == bool:
-        return res
-    # Try to convert to float
-    try:
-        return float(res)
-    except (ValueError, TypeError):
-        pass
-    # Parse string
-    if type(res) == str:
-        # Handle null passed in
-        if res in NULL_VALUES:
-            return None
-        if res.startswith("'") and res.endswith("'"):
-            return res[1:-1]
-
-        try:
-            return float((res.format(**row)))
-        except ValueError:
-            try:
-                val = res.format(**row)
-                # Handle val being part of missing_data_Values
-                if val in missing_data_values or val is None or (val == 'None' and row[res[1:-1]] == None):
-                    return None
-                return parser.parse(val)
-            except ValueError:
-                return val
-
-    if len(res) == 0:
-        return False
-    if len(res) == 1:
-        return parse_pyparser_result(row_counter, res[0], row, missing_data_values)
-    first_value = None
-    operation = None
-    try:
-        for term in res:
-            if not first_value:
-                first_value = term
-            elif not operation:
-                operation = term
-            else:
-                first_parsed = parse_pyparser_result(row_counter, first_value, row, missing_data_values)
-                second_parsed = parse_pyparser_result(row_counter, term, row, missing_data_values)
-                if operation == '>':
-                    first_value = first_parsed > second_parsed
-                elif operation == '>=':
-                    first_value = first_parsed >= second_parsed
-                elif operation == '<':
-                    first_value = first_parsed < second_parsed
-                elif operation == '<=':
-                    first_value = first_parsed <= second_parsed
-                elif operation == '!=':
-                    first_value = first_parsed != second_parsed
-                elif operation == '==':
-                    first_value = first_parsed == second_parsed
-                elif operation in ['AND', 'and', '&&']:
-                    first_value = first_parsed and second_parsed
-                elif operation in ['OR', 'or', '||']:
-                    first_value = first_parsed or second_parsed
-                operation = None
-    except TypeError as e:
-        raise e
-
-    return first_value
 
 
 
@@ -112,29 +29,54 @@ def modify_datapackage(datapackage_):
         if resources.match(resource_['name']):
             new_fields = [
                 {
-                    'name': f['target'],
-                    'type': 'string',
-                } for f in fields
+                    'name': nf['target'],
+                    'type': nf.get('type', 'string'),
+                } for nf in fields
             ]
+
+            def filter_old_field(field):
+                for nf in fields:
+                    if field['name'] == nf['target']:
+                        return False
+                return True
+            resource_['schema']['fields'] = list(filter(
+                filter_old_field,
+                resource_['schema']['fields'],
+            ))
             resource_['schema']['fields'] += new_fields
     return datapackage_
 
 def process_resource(rows, missing_data_values):
     field_functions = []
+    value_functions = []
     for index in range(len(fields)):
         field = fields[index]
         field_functions.append([])
+        value_functions.append([])
         for function in field.get('functions', []):
             boolean_string = function.get('boolean', '')
+            value_string = function.get('value', '')
             try:
                 field_functions[index].append(
-                    expr.parseString(boolean_string)
+                    boolean_expr.parseString(boolean_string)
                 )
-            except pp.ParseException as e:
+            except ParseException as e:
                 raise type(e)(
                         'Error parsing input. Make sure all strings are surrounded by \' \' and all fields are surrounded by { }:\n'
                     + str(e)
                 ).with_traceback(sys.exc_info()[2])
+            if function.get('math_operation', False):
+                try:
+                    value_functions[index].append(
+                        math_expr.parseString(value_string)
+                    )
+                except ParseException as e:
+                    raise type(e)(
+                            'Error parsing value input:\n'
+                        + str(e)
+                    ).with_traceback(sys.exc_info()[2])
+            else:
+                value_functions.append(None)
 
     row_counter = 0
     for row in rows:
@@ -148,11 +90,18 @@ def process_resource(rows, missing_data_values):
                     function = functions[func_index]
                     expression = field_functions[field_index][func_index]
 
-                    value_ = function.get('value', '')
-                    new_col = value_.format(**row)
-
-                    expression_true = parse_pyparser_result(row_counter, expression, row, missing_data_values)
+                    expression_true = parse_boolean(row_counter, expression, row, missing_data_values)
                     if expression_true:
+                        value_ = function.get('value', '')
+                        if function.get('math_operation', False):
+                            # Handle a mathematical equation in value
+                            value_expression = value_functions[field_index][func_index]
+                            new_col = parse_math(row_counter, value_expression, row, missing_data_values)
+                        else:
+                            new_val = value_.format(**row)
+                            if new_val in NULL_VALUES:
+                                new_val = None
+                            new_col = new_val
                         row[field['target']] = new_col
                     elif field['target'] not in row:
                         row[field['target']] = None
@@ -185,4 +134,3 @@ def process_resources(resource_iterator_):
 
 
 spew(modify_datapackage(datapackage), process_resources(resource_iterator))
-

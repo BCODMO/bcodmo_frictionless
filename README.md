@@ -79,7 +79,9 @@ _Parameters_:
   - `functions` - a list of functions for the new field
     - `boolean`- boolean string for this function. See notes for details on boolean string
     - `value` - the value to set if the boolean string evaluates as true
+    - `math_operation` - a boolean to determine whether or not the value should be evaluated as a mathematical expression.
   - `target` - the name of the new field to be created
+  - `type` - the type of the new field to be created
 
 _Notes_:
 
@@ -88,6 +90,8 @@ _Notes_:
     - {lat} > 50 && {depth} != NULL
     - {species} == 's. pecies' OR {species} == NULL
 - functions are evaluated in the order they are passed in. So if function 0 and function 3 both evaluate as true for row 30, the value in function 3 will show up in row 30.
+- Use curly braces {} to match field names in the row
+- If `math_operation` is set to true, the operators +, -, *, / and ^ can be used to set the value to the result of a mathematical operation. Order of operations are as expected and parentheses can be used to group operations.
 
 ### ***`bcodmo_pipeline_processors.convert_date`***
 
