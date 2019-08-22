@@ -63,7 +63,7 @@ def process_resource(rows, missing_data_values):
                     raise Exception(f'Couldn\'t convert "{match.group("degrees")}" to a number: from line "{row_value}"')
 
                 # Get the directional value
-                if directional in field:
+                if 'directional' in field:
                     directional = field['directional']
                 else:
                     try:
