@@ -37,6 +37,7 @@ def process_resource(rows, missing_data_values):
                     raise Exception(f'Input field {input_field} not found: {row}')
                 row_value = row[input_field]
                 output_field = field['output_field']
+                handle_ob = field.get('handle_out_of_bounds', False)
 
 
                 if row_value in missing_data_values or row_value is None:
@@ -92,7 +93,11 @@ def process_resource(rows, missing_data_values):
                         raise Exception(f'Couldn\'t convert "{match.group("seconds")}" to a number: from line "{row_value}"')
 
                     if seconds >= 60:
-                        raise Exception(f'Seconds are greater or equal to 60: {seconds}')
+                        if handle_ob:
+                            minutes += int(seconds / 60)
+                            seconds = seconds % 60
+                        else:
+                            raise Exception(f'Seconds are greater or equal to 60: {seconds}. Set the handle_out_of_bounds flag to true to handle this case')
                     decimal_minutes = minutes + (seconds / 60)
 
                 # Input is degrees, decimal seconds
@@ -106,7 +111,12 @@ def process_resource(rows, missing_data_values):
                         raise Exception(f'Couldn\'t convert "{match.group("decimal_minutes")}" to a number: from line "{row_value}"')
 
                 if decimal_minutes >= 60:
-                    raise Exception(f'Decimal minutes are greater or equal to 60 {decimal_minutes}')
+                    if handle_ob:
+                        degrees += (decimal_minutes / 60)
+                        decimal_minutes = decimal_minutes % 60
+
+                    else:
+                        raise Exception(f'Decimal minutes or minutes are greater or equal to 60 ({decimal_minutes}). Set the handle_out_of_bounds flag to true to handle this case')
 
                 if degrees < 0:
                     decimal_degrees = degrees - (decimal_minutes / 60)
@@ -117,6 +127,19 @@ def process_resource(rows, missing_data_values):
                 if (directional == 'W' or directional == 'S') and decimal_degrees >= 0:
                     decimal_degrees *= -1
 
+                if decimal_degrees > 180:
+                    if handle_ob:
+                        while decimal_degrees > 180:
+                            decimal_degrees -= 360
+                    else:
+                        raise Exception(f'Decimal degrees greater than 180 ({decimal_degrees}). Set the handle_out_of_bounds flag to true to handle this case')
+
+                if decimal_degrees < -180:
+                    if handle_ob:
+                        while decimal_degrees < -180:
+                            decimal_degrees += 360
+                    else:
+                        raise Exception(f'Decimal degrees less than 180 ({decimal_degrees}). Set the handle_out_of_bounds flag to true to handle this case')
                 row[output_field] = str(decimal_degrees)
 
             yield row
