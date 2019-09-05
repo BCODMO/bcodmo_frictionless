@@ -45,6 +45,7 @@ def concatenate(
     resources=None,
     include_source_name=False,
     source_field_name='source_name',
+    missing_values=[],
 ):
 
     def func(package):
@@ -94,6 +95,7 @@ def concatenate(
                     target['schema']['fields'].append(field)
                     field['name'] = name
                     needed_fields.remove(name)
+            target['schema']['missingValues'] = missing_values
         if len(target['schema']['primaryKey']) == 0:
             del target['schema']['primaryKey']
 
@@ -172,6 +174,7 @@ def flow(parameters):
             parameters.get('sources'),
             parameters.get('include_source_name', False),
             parameters.get('source_field_name', 'source_name'),
+            parameters.get('missing_values', []),
         ),
         update_resource(
             parameters.get('target', {}).get('name', 'concat'),
