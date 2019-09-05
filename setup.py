@@ -4,6 +4,7 @@ required = [
     'datapackage-pipelines',
     'pyparsing',
     'dataflows',
+    'pandas',
 ]
 
 
