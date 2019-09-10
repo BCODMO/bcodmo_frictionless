@@ -13,7 +13,7 @@ source .env
 Now when using dpp it will first look inside this repository when resolving processors.
 
 
-If you want to get rid of the bcodmo_pipeline_processors prefix you can instead set DPP_PROCESSOR_PATH to $GENERATOR_REPO/bcodmo_processors/bcodmo_pipeline_processors.
+If you want to get rid of the bcodmo_pipeline_processors prefix you can instead set DPP_PROCESSOR_PATH to $PROCESSOR_REPO/bcodmo_processors/bcodmo_pipeline_processors.
 
 ## The BCODMO Processor Library
 
