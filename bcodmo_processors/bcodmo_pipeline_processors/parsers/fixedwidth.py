@@ -7,10 +7,11 @@ from __future__ import unicode_literals
 import csv
 import math
 import six
+import re
 from itertools import chain
 from codecs import iterencode
 from tabulator.parser import Parser
-from tabulator import helpers, config
+from tabulator import helpers, config, exceptions
 import pandas as pd
 import logging
 
@@ -26,12 +27,32 @@ class FixedWidthParser(Parser):
     options = [
         'width',
         'infer',
+        'parse_seabird_header',
+        'fixedwidth_skip_header',
+        'fixedwidth_sample_size',
     ]
 
-    def __init__(self, loader, force_parse=False, width=None, infer=None):
+    def __init__(
+        self,
+        loader,
+        force_parse=False,
+        width=None,
+        infer=None,
+        parse_seabird_header=False,
+        fixedwidth_skip_header=[],
+        fixedwidth_sample_size=100,
+    ):
         self.__loader = loader
         self.__width = width
         self.__infer = infer
+        self.__parse_seabird_header = parse_seabird_header
+        # A list of strings that will be used to determine what is a comment at the top of the file
+        self.__fixedwidth_skip_header = fixedwidth_skip_header
+        # Ensure that # is included in seabird files, because that's how we will parse the header
+        if parse_seabird_header and '#' not in self.__fixedwidth_skip_header:
+            self.__fixedwidth_skip_header.append('#')
+        # Sample size for the pandas fixed width parser
+        self.__fixedwidth_sample_size = fixedwidth_sample_size
         self.__force_parse = force_parse
         self.__extended_rows = None
         self.__encoding = None
@@ -74,23 +95,60 @@ class FixedWidthParser(Parser):
                 'width is a required parameter for fixedwidth format if infer is not set'
             )
         items = self.__chars
-        if self.__infer:
+        last_item = None
+        file_pos = None
+        header_values = []
+        for item in iter(items.readline, ''):
+            last_item = item
+            if self.__parse_seabird_header:
+                match = re.match('^# name \d* = (.*):.*$', item)
+                if match:
+                    header_values.append(match.groups()[0])
+            is_comment = False
+            for skip_str in self.__fixedwidth_skip_header:
+                if item.startswith(skip_str):
+                    is_comment = True
 
+            if not is_comment:
+                break
+            file_pos = items.tell()
+
+        # Set the header value to the parsed result
+        if self.__parse_seabird_header:
+            if not self.__infer and len(width) != len(header_values):
+                raise exceptions.TabulatorException(
+                    f'The inferred header is of length {len(header_values)} but there are {len(width)} width values'
+                )
+            # Yield the header value as the first row
+            yield (1, None, header_values)
+
+        # Set stream back to previous value
+        if file_pos:
+            items.seek(file_pos)
+        else:
+            items.seek(0)
+
+        if self.__infer:
             reader = pd.read_fwf(
                 items,
                 colspecs='infer',
+                infer_nrows=self.__fixedwidth_sample_size,
                 chunksize=2,
             )
         else:
             reader = pd.read_fwf(
                 items,
                 widths=width,
+                infer_nrows=self.__fixedwidth_sample_size,
                 chunksize=2,
             )
+        index_offset = 0
+        if self.__parse_seabird_header:
+            index_offset = 1
         for chunk in reader:
             for index, row in chunk.iterrows():
                 if index == 0:
-                    yield (1, None, list(chunk))
+                    yield (1 + index_offset, None, list(chunk))
                 l = row.tolist()
                 l = [str(item) for item in l]
-                yield (index + 2, None, l)
+                yield (index + 2 + index_offset, None, l)

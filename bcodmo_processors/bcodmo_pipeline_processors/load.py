@@ -16,6 +16,23 @@ def flow(parameters, datapackage):
     _from = parameters.pop('from')
     _input_separator = parameters.pop('input_separator', ',')
     _remove_empty_rows = parameters.pop('remove_empty_rows', False)
+    if parameters.get('format') == 'bcodmo-fixedwidth':
+        # With fixed width files, we want to also send the sample_size
+        # and skip_rows parameters to the parser (not just the stream)
+        parameters['fixedwidth_sample_size'] = parameters.get('sample_size', 100)
+        parameters['fixedwidth_skip_header'] = [v for v in parameters.get('skip_rows', []) if type(v) == str]
+
+
+    if parameters.get('parse_seabird_header'):
+        '''
+        Handling a special case of parsing a seabird header.
+
+        Since the parser can't set the header value itself,
+        we will set header row to 1 and allow the bcodmo-fixedwidth
+        parser to populate the row at 1 with what it thinks the header values should be
+        '''
+        parameters['headers'] = 1
+
 
     num_resources = 0
 
