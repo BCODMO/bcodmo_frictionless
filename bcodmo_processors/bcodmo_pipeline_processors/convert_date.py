@@ -23,11 +23,17 @@ def modify_datapackage(datapackage_):
     dp_resources = datapackage_.get('resources', [])
     for resource_ in dp_resources:
         if resources.match(resource_['name']):
+            datapackage_fields = resource_['schema']['fields']
+            new_field_names = [f['output_field'] for f in fields]
+            datapackage_fields = [
+                f for f in datapackage_fields if f['name'] not in new_field_names
+            ]
             new_fields = [{
                 'name': f['output_field'],
                 'type': 'string',
             } for f in fields]
-            resource_['schema']['fields'] += new_fields
+            datapackage_fields += new_fields
+            resource_['schema']['fields'] = datapackage_fields
     return datapackage_
 
 
