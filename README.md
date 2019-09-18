@@ -85,7 +85,7 @@ _Parameters_:
 
 _Notes_:
 
-- boolean string is made up of an number of conditions and boolean comparisons. Conditions are made up of comparison term, operator, comparision term. A comparison term can be a date, a number, a variable (contained within curly braces {}), a string (contained within single quotes '') or null (can be one of None, NONE, null or NULL). An operator can be one of >=, >, <=, <, != or ==. Boolean comparison can be any one of AND, and, &&, OR, or, ||.
+- boolean string is made up of an number of conditions and boolean comparisons. Conditions are made up of comparison term, operator, comparision term. A comparison term can be a date, a number, a variable (contained within curly braces {}), a string (contained within single quotes '') or null (can be one of None, NONE, null or NULL). An operator can be one of >=, >, <=, <, != or ==. Boolean comparison can be any one of AND, and, &&, OR, or, ||. All terms and operators must be seperated by spaces.
   - For example:
     - {lat} > 50 && {depth} != NULL
     - {species} == 's. pecies' OR {species} == NULL
@@ -120,6 +120,7 @@ _Parameters_:
 _Notes_:
 
 - The output type is string until the [date type dump_to_path issue](https://github.com/BCODMO/frictionless-usecases/issues/19) is resolved 
+- If the `output_field` already exists in the schema, the existing values will be overwritten
 
 ### ***`bcodmo_pipeline_processors.convert_to_decimal_degrees`***
 
