@@ -222,11 +222,14 @@ _Parameters_:
 - `fields` - a list of fields to perform this operation on 
     - `name` - the name of the field to round
     - `digits` - the number of digits to round the field to
+    - `convert_to_integer` - whether the field should be converted to an integer
 
 _Notes_:
 
-- round_fields works on both string and number types, and the type of the field will stay the same
-- if attempted to use on a string type that can't be temporarily converted to a number an error will be thrown
+- As of v1.0.3, round_fields works on ONLY number types. 
+- if attempted to use on an incorrect field type an error will be thrown
+- `convert_to_integer` parameter will only work if digits is set to 0
+
 
 ### ***`bcodmo_pipeline_processors.split_column`***
 
