@@ -9,21 +9,36 @@ resources = ResourceMatcher(parameters.get('resources'), datapackage)
 fields = parameters.get('fields', [])
 
 
-def process_resource(rows, missing_data_values):
+def process_resource(rows, missing_data_values, schema):
+    logging.info(schema)
+    dp_resources = datapackage.get('resources', [])
     row_counter = 0
     for row in rows:
         row_counter += 1
         try:
             for field in fields:
-                orig_val = row[field['name']]
-                if orig_val in missing_data_values or orig_val is None:
-                    row[field['name']] = orig_val
-                    continue
-                rounded_val = round(float(orig_val), int(field['digits']))
-                # Convert the rounded val back to the original type
-                new_val = type(orig_val)(str(rounded_val))
-
-                row[field['name']] = new_val
+                cur_schema_field = {}
+                for schema_field in schema.get('fields', []):
+                    if schema_field['name'] == field['name']:
+                        cur_schema_field = schema_field
+                        break
+                logging.info(cur_schema_field)
+                # Check if the type in the datapackage is a number
+                if cur_schema_field['type'] == 'number':
+                    orig_val = row[field['name']]
+                    if orig_val in missing_data_values or orig_val is None:
+                        row[field['name']] = orig_val
+                        continue
+                    rounded_val = round(float(orig_val), int(field['digits']))
+                    # Convert the rounded val back to the original type
+                    # If the field has been cast to a number without validating,
+                    # it might be a string here
+                    new_val = type(orig_val)(str(rounded_val))
+                    row[field['name']] = new_val
+                else:
+                    raise Exception(
+                        f'Attempting to convert a field ("{field["name"]}") that has not been cast to a number'
+                    )
             yield row
         except Exception as e:
             raise type(e)(
@@ -41,13 +56,14 @@ def process_resources(resource_iterator_):
             missing_data_values = ['']
             for resource_datapackage in datapackage.get('resources', []):
                 if resource_datapackage['name'] == spec['name']:
-                    missing_data_values = resource_datapackage.get(
+                    schema = resource_datapackage.get(
                         'schema', {},
-                    ).get(
+                    )
+                    missing_data_values = schema.get(
                         'missingValues', ['']
                     )
                     break
-            yield process_resource(resource, missing_data_values)
+            yield process_resource(resource, missing_data_values, schema)
 
 
 spew(datapackage, process_resources(resource_iterator))
