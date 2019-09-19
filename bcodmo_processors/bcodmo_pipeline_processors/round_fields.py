@@ -18,15 +18,14 @@ def modify_datapackage(datapackage_):
                 if field.get('convert_to_integer', False) and field['digits'] == 0:
                     def convert_to_integer(f):
                         if f['name'] == field['name']:
-                            if f['type'] is not 'number':
+                            if f['type'] != 'number':
                                 raise Exception(
-                                    f'Attempting to convert a field ("{f["name"]}") that has not been cast to a number'
+                                    f'Attempting to convert a field ("{f["name"]}") that has not been cast to a number: {f["type"]}'
                                 )
                             f['type'] = 'integer'
                         return f
 
-                    for datapackage_field in datapackage_fields:
-                        datapackage_fields = list(map(convert_to_integer, datapackage_fields))
+                    datapackage_fields = list(map(convert_to_integer, datapackage_fields))
 
             resource_['schema']['fields'] = datapackage_fields
     return datapackage_
