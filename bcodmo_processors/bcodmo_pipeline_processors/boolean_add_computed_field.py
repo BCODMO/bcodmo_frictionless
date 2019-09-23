@@ -10,7 +10,7 @@ from dataflows.helpers.resource_matcher import ResourceMatcher
 
 from datapackage_pipelines.wrapper import ingest, spew
 
-from boolean_add_computed_field_helper import (
+from boolean_processor_helper import (
     NULL_VALUES,
     boolean_expr, math_expr,
     parse_boolean, parse_math
