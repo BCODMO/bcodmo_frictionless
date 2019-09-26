@@ -1,3 +1,5 @@
+import xlrd
+import re
 from dataflows import Flow, load
 from datapackage_pipelines.wrapper import ingest
 from datapackage_pipelines.utilities.flow_utils import spew_flow
@@ -97,12 +99,38 @@ def flow(parameters, datapackage):
         # Default the name to res[1-n]
         resource_name = names[i]
 
-        params.extend([
-            load(url, custom_parsers = custom_parsers, name = resource_name, **parameters),
-            mark_streaming(url, resource_name),
-        ])
-        if _remove_empty_rows:
-            params.append(remove_empty_rows(resource_name))
+        if parameters.get('sheet_regex', False):
+            '''
+            Handling a regular expression sheet name
+            '''
+            xls = xlrd.open_workbook(url, on_demand=True)
+            sheet_names = xls.sheet_names()
+            sheet_regex = parameters.pop('sheet', '')
+            for sheet_name in sheet_names:
+                if re.match(sheet_regex, sheet_name):
+                    new_name = re.sub('[^-a-z0-9._]', '', sheet_name.lower())
+                    if len(_from.split(_input_separator)) > 1:
+                        # If there are multiple urls being loaded, have the name take that into account
+                        new_name = f'{resource_name}-{new_name}'
+                    params.extend([
+                        load(
+                            url,
+                            custom_parsers = custom_parsers,
+                            name = new_name,
+                            sheet = sheet_name,
+                            **parameters,
+                        ),
+                        mark_streaming(url, new_name),
+                    ])
+                    if _remove_empty_rows:
+                        params.append(remove_empty_rows(new_name))
+        else:
+            params.extend([
+                load(url, custom_parsers = custom_parsers, name = resource_name, **parameters),
+                mark_streaming(url, resource_name),
+            ])
+            if _remove_empty_rows:
+                params.append(remove_empty_rows(resource_name))
 
     return Flow(
         count_resources(),

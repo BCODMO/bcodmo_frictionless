@@ -29,11 +29,14 @@ _Parameters_:
 - `missing_values` - a list of values that are interpretated as missing data (nd) values. Defaults to `['']`
 - `input_seperator` - the string used to separate values in the `from` and `name` parameters for loading multiple resources with one processor. Defaults to `','`
 - `remove_empty_rows` - a boolean determining if empty rows (rows where all values are the empty string or None) are deleted. Defaults to false
+- `sheet_regex` - a boolean determining if the sheet name from an xlsx/xls file should be processed with a regular expression
 
 _Other differences from the standard load_:
 
+- `from` and `name` can be a delimeter seperated list of sources/resource names.
 - additional bcodmo-fixedwidth parser that takes in `width` and `infer` parameters
 - if `name` is left empty the resource name will default to `res{n}` where n is the number of resources.
+- if `sheet_regex` is used `name` will be ignored and the sheet will be the resource name, unless there are multiple `from` values, in which case the name will be `{resource_name}-{sheet_name}`
 
 See standard processor for examples.
 
