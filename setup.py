@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 required = [
-    'datapackage-pipelines==2.1.9',
+    'datapackage-pipelines==2.1.10',
     'pyparsing==2.2.0',
     'dataflows==0.0.58',
     'tabulator==1.24.2',
