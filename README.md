@@ -37,6 +37,7 @@ _Other differences from the standard load_:
 - additional bcodmo-fixedwidth parser that takes in `width` and `infer` parameters
 - if `name` is left empty the resource name will default to `res{n}` where n is the number of resources.
 - if `sheet_regex` is used `name` will be ignored and the sheet will be the resource name, unless there are multiple `from` values, in which case the name will be `{resource_name}-{sheet_name}`
+- `sheet_regex` can only be used with local paths
 
 See standard processor for examples.
 
