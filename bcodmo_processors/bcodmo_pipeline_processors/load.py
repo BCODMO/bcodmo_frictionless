@@ -103,7 +103,10 @@ def flow(parameters, datapackage):
             '''
             Handling a regular expression sheet name
             '''
-            xls = xlrd.open_workbook(url, on_demand=True)
+            try:
+                xls = xlrd.open_workbook(url, on_demand=True)
+            except FileNotFoundError:
+                raise Exception(f'The file {url} was not found. Remember that sheet regular expressions only work on local paths')
             sheet_names = xls.sheet_names()
             sheet_regex = parameters.pop('sheet', '')
             for sheet_name in sheet_names:
