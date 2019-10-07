@@ -62,7 +62,7 @@ def process_resource(rows, missing_data_values):
                 )
             except ParseException as e:
                 raise type(e)(
-                        'Error parsing input. Make sure all strings are surrounded by \' \' and all fields are surrounded by { }:\n'
+                        'Error parsing input. Make sure all strings are surrounded by \' \' and all fields are surrounded by { }: '
                     + str(e)
                 ).with_traceback(sys.exc_info()[2])
             if function.get('math_operation', False):
@@ -72,7 +72,7 @@ def process_resource(rows, missing_data_values):
                     )
                 except ParseException as e:
                     raise type(e)(
-                            'Error parsing value input:\n'
+                            'Error parsing value input: '
                         + str(e)
                     ).with_traceback(sys.exc_info()[2])
             else:

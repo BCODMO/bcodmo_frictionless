@@ -7,6 +7,7 @@ from pyparsing import (
 )
 
 NULL_VALUES = ['null', 'NULL', 'None', 'NONE']
+LINE_NUMBER = 'LINE_NUMBER'
 
 '''
 BOOLEAN OPERATION
@@ -20,8 +21,9 @@ number = Regex(r"[+-]?\d+(:?\.\d*)?(:?[eE][+-]?\d+)?")
 variable = Regex(r"\{.*?\}")
 string = Regex(r"'.*?'")
 null = Regex('|'.join(NULL_VALUES))
+line_number = Regex(LINE_NUMBER)
 
-boolean_comparison_term = date | number | variable | string | null
+boolean_comparison_term = date | number | variable | string | null | line_number
 boolean_condition = Group(
     boolean_comparison_term + boolean_operator + boolean_comparison_term,
 )
@@ -51,6 +53,8 @@ def parse_boolean(row_counter, res, row, missing_data_values):
         # Handle null passed in
         if res in NULL_VALUES:
             return None
+        if res == LINE_NUMBER:
+            return row_counter
         if res.startswith("'") and res.endswith("'"):
             return res[1:-1]
 

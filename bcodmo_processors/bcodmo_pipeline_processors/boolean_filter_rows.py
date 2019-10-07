@@ -30,7 +30,7 @@ def process_resource(rows, missing_data_values):
             )
         except ParseException as e:
             raise type(e)(
-                    f'Error parsing boolean string {boolean_string}. Make sure all strings are surrounded by \' \' and all fields are surrounded by {{ }}:\n'
+                    f'Error parsing boolean string {boolean_string}. Make sure all strings are surrounded by \' \' and all fields are surrounded by {{ }}: '
                 + str(e)
             ).with_traceback(sys.exc_info()[2])
 
