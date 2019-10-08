@@ -4,16 +4,13 @@ import collections
 import logging
 import time
 
-from pyparsing import ParseException
-
 from dataflows.helpers.resource_matcher import ResourceMatcher
 
 from datapackage_pipelines.wrapper import ingest, spew
 
 from boolean_processor_helper import (
-    NULL_VALUES,
-    boolean_expr,
-    parse_boolean,
+    get_expression,
+    check_line,
 )
 
 parameters, datapackage, resource_iterator = ingest()
@@ -21,33 +18,14 @@ parameters, datapackage, resource_iterator = ingest()
 resources = ResourceMatcher(parameters.get('resources'), datapackage)
 
 def process_resource(rows, missing_data_values):
-    expressions = []
-    for function in parameters.get('functions', []):
-        boolean_string = function.get('boolean', '')
-        try:
-            expressions.append(
-                boolean_expr.parseString(boolean_string)
-            )
-        except ParseException as e:
-            raise type(e)(
-                    f'Error parsing boolean string {boolean_string}. Make sure all strings are surrounded by \' \' and all fields are surrounded by {{ }}: '
-                + str(e)
-            ).with_traceback(sys.exc_info()[2])
+    expression = get_expression(parameters.get('boolean_statement', None))
 
     row_counter = 0
     for row in rows:
         row_counter += 1
-        try:
-            for expression in expressions:
-                expression_true = parse_boolean(row_counter, expression, row, missing_data_values)
-                if expression_true:
-                    yield row
-                    break
-        except Exception as e:
-            raise type(e)(
-                str(e) +
-                f' at row {row_counter}'
-            ).with_traceback(sys.exc_info()[2])
+        line_passed = check_line(expression, row_counter, row, missing_data_values)
+        if line_passed:
+            yield row
 
 
 def process_resources(resource_iterator_):

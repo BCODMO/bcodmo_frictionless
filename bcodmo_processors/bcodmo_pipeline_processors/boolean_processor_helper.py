@@ -1,13 +1,14 @@
+import sys
 import logging
 from dateutil import parser
 from pyparsing import (
     Regex, Group, operatorPrecedence,
     opAssoc, Literal, Forward,
-    ZeroOrMore,
+    ZeroOrMore, ParseException,
 )
 
 NULL_VALUES = ['null', 'NULL', 'None', 'NONE']
-LINE_NUMBER = 'LINE_NUMBER'
+ROW_NUMBER = ['ROW_NUMBER', 'LINE_NUMBER']
 
 '''
 BOOLEAN OPERATION
@@ -21,9 +22,9 @@ number = Regex(r"[+-]?\d+(:?\.\d*)?(:?[eE][+-]?\d+)?")
 variable = Regex(r"\{.*?\}")
 string = Regex(r"'.*?'")
 null = Regex('|'.join(NULL_VALUES))
-line_number = Regex(LINE_NUMBER)
+row_number = Regex('|'.join(ROW_NUMBER))
 
-boolean_comparison_term = date | number | variable | string | null | line_number
+boolean_comparison_term = date | number | variable | string | null | row_number
 boolean_condition = Group(
     boolean_comparison_term + boolean_operator + boolean_comparison_term,
 )
@@ -53,7 +54,7 @@ def parse_boolean(row_counter, res, row, missing_data_values):
         # Handle null passed in
         if res in NULL_VALUES:
             return None
-        if res == LINE_NUMBER:
+        if res in ROW_NUMBER:
             return row_counter
         if res.startswith("'") and res.endswith("'"):
             return res[1:-1]
@@ -85,6 +86,7 @@ def parse_boolean(row_counter, res, row, missing_data_values):
             else:
                 first_parsed = parse_boolean(row_counter, first_value, row, missing_data_values)
                 second_parsed = parse_boolean(row_counter, term, row, missing_data_values)
+                logging.info(f'{first_parsed}, {second_parsed}, {type(first_parsed)}, {type(second_parsed)}')
                 if operation == '>':
                     first_value = first_parsed > second_parsed
                 elif operation == '>=':
@@ -206,3 +208,26 @@ def parse_math(row_counter, res, row, missing_data_values):
         raise e
 
     return current_value
+
+def get_expression(function, expr_parser=boolean_expr):
+    if not function:
+        return None
+    try:
+        return expr_parser.parseString(function)
+    except ParseException as e:
+        raise type(e)(
+                f'Error parsing boolean string {function}. Make sure all strings are surrounded by \' \' and all fields are surrounded by {{ }}: '
+            + str(e)
+        ).with_traceback(sys.exc_info()[2])
+
+def check_line(expression, row_counter, row, missing_data_values, parser=parse_boolean):
+    if not expression:
+        return True
+    try:
+        return parser(row_counter, expression, row, missing_data_values)
+    except Exception as e:
+        raise type(e)(
+            str(e) +
+            f' at row {row_counter}'
+        ).with_traceback(sys.exc_info()[2])
+    return False
