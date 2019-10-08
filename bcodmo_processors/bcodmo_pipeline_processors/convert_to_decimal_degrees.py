@@ -4,6 +4,11 @@ from dataflows.helpers.resource_matcher import ResourceMatcher
 import logging
 import re
 
+from boolean_processor_helper import (
+    get_expression,
+    check_line,
+)
+
 logging.basicConfig(
     level=logging.WARNING,
 )
@@ -27,8 +32,10 @@ def modify_datapackage(datapackage_):
 
 
 def process_resource(rows, missing_data_values):
+    expression = get_expression(parameters.get('boolean_statement', None))
     row_counter = 0
     for row in rows:
+        line_passed = check_line(expression, row_counter, row, missing_data_values)
         row_counter += 1
         try:
             for field in fields:
@@ -39,6 +46,9 @@ def process_resource(rows, missing_data_values):
                 output_field = field['output_field']
                 handle_ob = field.get('handle_out_of_bounds', False)
 
+                if not line_passed:
+                    row[output_field] = None
+                    continue
 
                 if row_value in missing_data_values or row_value is None:
                     row[output_field] = row_value
