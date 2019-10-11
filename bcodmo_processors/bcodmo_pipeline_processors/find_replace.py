@@ -1,4 +1,5 @@
-from dataflows import Flow, find_replace
+import logging
+from dataflows import Flow
 from datapackage_pipelines.wrapper import ingest
 from datapackage_pipelines.utilities.flow_utils import spew_flow
 from dataflows.helpers.resource_matcher import ResourceMatcher
@@ -11,7 +12,7 @@ from boolean_processor_helper import (
 
 
 
-def _find_replace(rows, parameters):
+def _find_replace(rows, parameters, missing_data_values):
     fields = parameters.get('fields', [])
     expression = get_expression(parameters.get('boolean_statement', None))
 
@@ -20,33 +21,46 @@ def _find_replace(rows, parameters):
         row_counter += 1
 
         line_passed = check_line(expression, row_counter, row, missing_data_values)
-        for field in fields:
-            for pattern in field.get('patterns', []):
-                row[field['name']] = re.sub(
-                    str(pattern['find']),
-                    str(pattern['replace']),
-                    str(row[field['name']]))
+        if line_passed:
+            for field in fields:
+                for pattern in field.get('patterns', []):
+                    row[field['name']] = re.sub(
+                        str(pattern['find']),
+                        str(pattern['replace']),
+                        str(row[field['name']]))
         yield row
 
 
-def find_replace(parameters, resources=None):
+def find_replace(parameters, datapackage, resources=None):
 
     def func(package):
         matcher = ResourceMatcher(resources, package.pkg)
+        logging.info(datapackage)
         yield package.pkg
         for rows in package:
+            missing_data_values = ['']
+            for resource_datapackage in datapackage.get('resources', []):
+                if resource_datapackage['name'] == rows.res.name:
+                    missing_data_values = resource_datapackage.get(
+                        'schema', {},
+                    ).get(
+                        'missingValues', ['']
+                    )
+                    break
+
             if matcher.match(rows.res.name):
-                yield _find_replace(rows, parameters)
+                yield _find_replace(rows, parameters, missing_data_values)
             else:
                 yield rows
 
     return func
 
 
-def flow(parameters):
+def flow(parameters, datapackage):
     return Flow(
         find_replace(
             parameters,
+            datapackage,
             resources=parameters.get('resources')
         )
     )
@@ -54,4 +68,4 @@ def flow(parameters):
 
 if __name__ == '__main__':
     with ingest() as ctx:
-        spew_flow(flow(ctx.parameters), ctx)
+        spew_flow(flow(ctx.parameters, ctx.datapackage), ctx)
