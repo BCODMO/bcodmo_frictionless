@@ -97,16 +97,14 @@ _Notes_:
 - Use curly braces {} to match field names in the row
 - If `math_operation` is set to true, the operators +, -, *, / and ^ can be used to set the value to the result of a mathematical operation. Order of operations are as expected and parentheses can be used to group operations.
 
-### ***`bcodmo_pipeline_processors.boolean_add_computed_field`***
+### ***`bcodmo_pipeline_processors.boolean_filter_rows`***
 
 Filter rows with a boolean statement
 
 _Parameters_:
 
 - `resources` - a list of resources to perform this operation on
-- `fields` - a list of new_fields
-- `functions` - a list of functions for the new field
-  - `boolean`- boolean string for this function. See notes in `boolean_add_computed_field` for details.
+- `boolean_statement` - a single boolean statement. Only rows that pass the statement will be kept. `See boolean_add_computed_field` for details on boolean syntax.
 
 _Notes_:
 
@@ -123,6 +121,7 @@ _Parameters_:
   - `output_format` - the python datetime format string for the output field
   - `input_type` - the input field type. One of 'python' or 'excel'. If 'python', evaluate the input field/fields using python format strings. If 'excel', only take in a single input field and evaluate it as an excel date serial number.
   - `input_field` - a single input field. Only use if `input_type` is 'excel'. Depecrated if `input_type` is 'python'. 
+- `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
 
    ***the rest of the parameters are only relevant if input_type is 'python'***
   - `inputs` - a list of input fields
@@ -153,6 +152,7 @@ _Parameters_:
   - `input_format` - the input format. One of 'degrees-minutes-seconds' or 'degrees-decimal_minutes'
   - `pattern` - the pattern for the input field. See notes for details
   - `directional` - the directional of the coordinate. Must be one of 'N', 'E', 'S', 'W'
+- `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
 
 
 _Notes_:
@@ -241,6 +241,7 @@ _Parameters_:
     - `name` - the name of the field to round
     - `digits` - the number of digits to round the field to
     - `convert_to_integer` - whether the field should be converted to an integer
+- `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
 
 _Notes_:
 
@@ -261,8 +262,20 @@ _Parameters_:
     - `output_fields` - the names of the output fields
     - `pattern` - the pattern to match the input_field. Use python regular expression matches (denoted by parentheses) to capture values for `output_fields` 
 - `delete_input` - whether the `input_field` should be deleted after the `output_fields` are created
+- `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
 
 _Notes_:
 
 - all new fields will be typed as strings 
 - the number of matches in `pattern` must equal the number of output fields in `output_fields`
+
+### ***`bcodmo_pipeline_processors.find_replace`***
+
+Find and replace regular expression within a field. Same as standard processor other than boolean.
+
+_Parameters_:
+
+- All parameters from the [standard processor find_replace](https://github.com/frictionlessdata/datapackage-pipelines#find_replace)
+- `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
+
+_Notes_:
