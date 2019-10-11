@@ -69,6 +69,7 @@ def process_resource(rows, missing_data_values):
                     for output_field in output_fields:
                         row[output_field] = row_value
                     continue
+                row_value = str(row_value)
 
 
                 pattern = field['pattern']
