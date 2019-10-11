@@ -7,6 +7,11 @@ import logging
 import pytz
 import re
 
+from boolean_processor_helper import (
+    get_expression,
+    check_line,
+)
+
 logging.basicConfig(
     level=logging.WARNING,
 )
@@ -38,9 +43,13 @@ def modify_datapackage(datapackage_):
 
 
 def process_resource(rows, missing_data_values):
+    expression = get_expression(parameters.get('boolean_statement', None))
+
     row_counter = 0
     for row in rows:
         row_counter += 1
+
+        line_passed = check_line(expression, row_counter, row, missing_data_values)
         try:
             for field in fields:
                 # Inititalize all of the parameters that are used by both python and excel input_type
@@ -81,6 +90,13 @@ def process_resource(rows, missing_data_values):
                         input_format = field['input_format']
                     else:
                         raise Exception('One of input_field or inputs is required')
+
+                    if not line_passed:
+                        if output_field in row:
+                            row[output_field] = row[output_field]
+                        else:
+                            row[output_field] = None
+                        continue
 
                     if row_value in missing_data_values or row_value is None:
                         row[output_field] = row_value

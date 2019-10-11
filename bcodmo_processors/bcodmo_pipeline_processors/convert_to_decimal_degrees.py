@@ -4,6 +4,11 @@ from dataflows.helpers.resource_matcher import ResourceMatcher
 import logging
 import re
 
+from boolean_processor_helper import (
+    get_expression,
+    check_line,
+)
+
 logging.basicConfig(
     level=logging.WARNING,
 )
@@ -18,18 +23,28 @@ def modify_datapackage(datapackage_):
     dp_resources = datapackage_.get('resources', [])
     for resource_ in dp_resources:
         if resources.match(resource_['name']):
+            datapackage_fields = resource_['schema']['fields']
+            new_field_names = [f['output_field'] for f in fields]
+            datapackage_fields = [
+                f for f in datapackage_fields if f['name'] not in new_field_names
+            ]
             new_fields = [{
                 'name': f['output_field'],
                 'type': 'number',
             } for f in fields]
-            resource_['schema']['fields'] += new_fields
+            datapackage_fields += new_fields
+            resource_['schema']['fields'] = datapackage_fields
+
     return datapackage_
 
 
 def process_resource(rows, missing_data_values):
+    expression = get_expression(parameters.get('boolean_statement', None))
     row_counter = 0
     for row in rows:
         row_counter += 1
+
+        line_passed = check_line(expression, row_counter, row, missing_data_values)
         try:
             for field in fields:
                 input_field = field['input_field']
@@ -39,6 +54,12 @@ def process_resource(rows, missing_data_values):
                 output_field = field['output_field']
                 handle_ob = field.get('handle_out_of_bounds', False)
 
+                if not line_passed:
+                    if output_field in row:
+                        row[output_field] = row[output_field]
+                    else:
+                        row[output_field] = None
+                    continue
 
                 if row_value in missing_data_values or row_value is None:
                     row[output_field] = row_value

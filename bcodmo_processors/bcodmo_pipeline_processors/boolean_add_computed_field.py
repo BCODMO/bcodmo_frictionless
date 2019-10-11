@@ -4,15 +4,14 @@ import collections
 import logging
 import time
 
-from pyparsing import ParseException
-
 from dataflows.helpers.resource_matcher import ResourceMatcher
 
 from datapackage_pipelines.wrapper import ingest, spew
 
 from boolean_processor_helper import (
     NULL_VALUES,
-    boolean_expr, math_expr,
+    get_expression,
+    math_expr,
     parse_boolean, parse_math
 )
 
@@ -56,25 +55,16 @@ def process_resource(rows, missing_data_values):
         for function in field.get('functions', []):
             boolean_string = function.get('boolean', '')
             value_string = function.get('value', '')
-            try:
-                field_functions[index].append(
-                    boolean_expr.parseString(boolean_string)
-                )
-            except ParseException as e:
-                raise type(e)(
-                        'Error parsing input. Make sure all strings are surrounded by \' \' and all fields are surrounded by { }:\n'
-                    + str(e)
-                ).with_traceback(sys.exc_info()[2])
+
+            # Parse the field boolean string
+            field_expression = get_expression(boolean_string)
+            field_functions[index].append(field_expression)
+
+            # Parse the value boolean string
+
             if function.get('math_operation', False):
-                try:
-                    value_functions[index].append(
-                        math_expr.parseString(value_string)
-                    )
-                except ParseException as e:
-                    raise type(e)(
-                            'Error parsing value input:\n'
-                        + str(e)
-                    ).with_traceback(sys.exc_info()[2])
+                value_expression = get_expression(value_string, math_expr)
+                value_functions[index].append(value_expression)
             else:
                 value_functions.append(None)
 
