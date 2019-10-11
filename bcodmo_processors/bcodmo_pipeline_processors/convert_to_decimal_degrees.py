@@ -35,8 +35,9 @@ def process_resource(rows, missing_data_values):
     expression = get_expression(parameters.get('boolean_statement', None))
     row_counter = 0
     for row in rows:
-        line_passed = check_line(expression, row_counter, row, missing_data_values)
         row_counter += 1
+
+        line_passed = check_line(expression, row_counter, row, missing_data_values)
         try:
             for field in fields:
                 input_field = field['input_field']
