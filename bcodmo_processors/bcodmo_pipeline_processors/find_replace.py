@@ -15,7 +15,11 @@ def _find_replace(rows, parameters):
     fields = parameters.get('fields', [])
     expression = get_expression(parameters.get('boolean_statement', None))
 
+    row_counter = 0
     for row in rows:
+        row_counter += 1
+
+        line_passed = check_line(expression, row_counter, row, missing_data_values)
         for field in fields:
             for pattern in field.get('patterns', []):
                 row[field['name']] = re.sub(
