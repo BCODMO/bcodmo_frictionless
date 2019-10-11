@@ -23,11 +23,18 @@ def modify_datapackage(datapackage_):
     dp_resources = datapackage_.get('resources', [])
     for resource_ in dp_resources:
         if resources.match(resource_['name']):
+            datapackage_fields = resource_['schema']['fields']
+            new_field_names = [f['output_field'] for f in fields]
+            datapackage_fields = [
+                f for f in datapackage_fields if f['name'] not in new_field_names
+            ]
             new_fields = [{
                 'name': f['output_field'],
                 'type': 'number',
             } for f in fields]
-            resource_['schema']['fields'] += new_fields
+            datapackage_fields += new_fields
+            resource_['schema']['fields'] = datapackage_fields
+
     return datapackage_
 
 
@@ -48,7 +55,10 @@ def process_resource(rows, missing_data_values):
                 handle_ob = field.get('handle_out_of_bounds', False)
 
                 if not line_passed:
-                    row[output_field] = None
+                    if output_field in row:
+                        row[output_field] = row[output_field]
+                    else:
+                        row[output_field] = None
                     continue
 
                 if row_value in missing_data_values or row_value is None:

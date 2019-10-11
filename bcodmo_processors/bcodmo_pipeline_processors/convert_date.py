@@ -92,7 +92,10 @@ def process_resource(rows, missing_data_values):
                         raise Exception('One of input_field or inputs is required')
 
                     if not line_passed:
-                        row[output_field] = None
+                        if output_field in row:
+                            row[output_field] = row[output_field]
+                        else:
+                            row[output_field] = None
                         continue
 
                     if row_value in missing_data_values or row_value is None:
