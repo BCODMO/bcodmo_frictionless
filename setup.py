@@ -12,7 +12,7 @@ required = [
 
 setup(
     name='bcodmo_processors',
-    version='v0.0.1',
+    version='v1.0.4',
     description='BCODMO Custom Processors',
     author='BCODMO',
     author_email='conrad.schloer@gmail.com',
