@@ -35,7 +35,8 @@ def modify_datapackage(datapackage_):
             ]
             new_fields = [{
                 'name': f['output_field'],
-                'type': 'string',
+                'type': 'datetime',
+                'outputFormat': f['output_format'],
             } for f in fields]
             datapackage_fields += new_fields
             resource_['schema']['fields'] = datapackage_fields
