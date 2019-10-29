@@ -112,7 +112,17 @@ def process_resource(rows, missing_data_values):
 
                     year = field.get('year', None)
 
-                    date_obj = datetime.strptime(row_value, input_format)
+                    try:
+                        date_obj = datetime.strptime(row_value, input_format)
+                    except ValueError as e:
+                        if year and str(e) == 'day is out of range for month':
+                            # Possible leap year date without year in string
+                            date_obj = datetime.strptime(
+                                f'{year} {row_value}',
+                                f'%Y {input_format}'
+                            )
+                        else:
+                            raise e
                     if not date_obj.tzinfo:
                         if not input_timezone:
                             if '%Z' in output_format:
