@@ -134,6 +134,7 @@ class FixedWidthParser(Parser):
                 colspecs='infer',
                 infer_nrows=self.__fixedwidth_sample_size,
                 chunksize=2,
+                dtype=str,
             )
         else:
             reader = pd.read_fwf(
@@ -141,6 +142,7 @@ class FixedWidthParser(Parser):
                 widths=width,
                 infer_nrows=self.__fixedwidth_sample_size,
                 chunksize=2,
+                dtype=str,
             )
         index_offset = 0
         if self.__parse_seabird_header:
