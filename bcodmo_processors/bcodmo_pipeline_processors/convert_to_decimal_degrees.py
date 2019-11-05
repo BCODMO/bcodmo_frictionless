@@ -3,6 +3,7 @@ from datapackage_pipelines.wrapper import ingest, spew
 from dataflows.helpers.resource_matcher import ResourceMatcher
 import logging
 import re
+from decimal import Decimal
 
 from boolean_processor_helper import (
     get_expression,
@@ -78,7 +79,7 @@ def process_resource(rows, missing_data_values):
 
                 # Get the degrees value
                 try:
-                    degrees = float(match.group('degrees'))
+                    degrees = Decimal(match.group('degrees'))
                 except IndexError:
                     raise Exception(f'The degrees group is required in the expression \"{pattern}\"')
                 except ValueError:
@@ -99,7 +100,7 @@ def process_resource(rows, missing_data_values):
 
                     # Get the minutes value
                     try:
-                        minutes = float(match.group('minutes'))
+                        minutes = Decimal(match.group('minutes'))
                     except IndexError:
                         raise Exception(f'The minutes group is required in the expression \"{pattern}\"')
                     except ValueError:
@@ -107,7 +108,7 @@ def process_resource(rows, missing_data_values):
 
                     # Get the seconds value
                     try:
-                        seconds = float(match.group('seconds'))
+                        seconds = Decimal(match.group('seconds'))
                     except IndexError:
                         raise Exception(f'The seconds group is required in the expression \"{pattern}\"')
                     except ValueError:
@@ -125,7 +126,7 @@ def process_resource(rows, missing_data_values):
                 elif input_format == 'degrees-decimal_minutes':
                     # Get the decimal_minutes value
                     try:
-                        decimal_minutes = float(match.group('decimal_minutes'))
+                        decimal_minutes = Decimal(match.group('decimal_minutes'))
                     except IndexError:
                         raise Exception(f'The decimal_minutes group is required in the expression \"{pattern}\"')
                     except ValueError:
@@ -161,7 +162,7 @@ def process_resource(rows, missing_data_values):
                             decimal_degrees += 360
                     else:
                         raise Exception(f'Decimal degrees less than 180 ({decimal_degrees}). Set the handle_out_of_bounds flag to true to handle this case')
-                row[output_field] = str(decimal_degrees)
+                row[output_field] = decimal_degrees
 
             yield row
         except Exception as e:
