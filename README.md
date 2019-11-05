@@ -240,6 +240,8 @@ _Parameters_:
 - `fields` - a list of fields to perform this operation on 
     - `name` - the name of the field to round
     - `digits` - the number of digits to round the field to
+    - `preserve_trailing_zeros` - whether trailing zeros should be preserved
+    - `maximum_precision` - whether values with precision lower than digits should be rounded
     - `convert_to_integer` - whether the field should be converted to an integer
 - `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
 

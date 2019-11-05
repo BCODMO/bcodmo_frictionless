@@ -2,6 +2,7 @@ import sys
 from datapackage_pipelines.wrapper import ingest, spew
 from dataflows.helpers.resource_matcher import ResourceMatcher
 import logging
+from decimal import Decimal
 
 from boolean_processor_helper import (
     get_expression,
@@ -35,6 +36,10 @@ def modify_datapackage(datapackage_):
             resource_['schema']['fields'] = datapackage_fields
     return datapackage_
 
+def remove_trailing_zeros(f):
+    d = Decimal(str(f));
+    return d.quantize(Decimal(1)) if d == d.to_integral() else d.normalize()
+
 def process_resource(rows, missing_data_values, schema):
     dp_resources = datapackage.get('resources', [])
     expression = get_expression(parameters.get('boolean_statement', None))
@@ -60,18 +65,27 @@ def process_resource(rows, missing_data_values, schema):
                         if orig_val in missing_data_values or orig_val is None:
                             row[field['name']] = orig_val
                             continue
-                        rounded_val = round(float(orig_val), int(field['digits']))
-                        # Convert the rounded val back to the original type
-                        # If the field has been cast to a number without validating,
-                        # it might be a string here
-                        new_val = type(orig_val)(str(rounded_val))
-                        #
-                        if field.get('convert_to_integer', False) and field['digits'] == 0:
-                            # If we have cast to integer AND validated, we can set the type here to integer
-                            if type(orig_val) is not 'string':
-                                new_val = int(new_val)
+                        orig_type = type(orig_val)
+                        if orig_type is not Decimal:
+                            orig_val = Decimal(str(origin_val))
+                        digits = int(field.get('digits'))
 
-                        row[field['name']] = new_val
+                        if field.get('maximum_precision', False):
+                            # Find the current precision and ignore this row if it's lower than digits
+                            current_precision = orig_val.as_tuple().exponent * -1
+                            if current_precision < digits:
+                                continue
+
+
+                        rounded_val = round(orig_val, digits)
+
+                        if not field.get('preserve_trailing_zeros', False):
+                            rounded_val = remove_trailing_zeros(rounded_val)
+
+                        if field.get('convert_to_integer', False) and field['digits'] == 0:
+                            rounded_val = int(new_val)
+
+                        row[field['name']] = rounded_val
                     else:
                         raise Exception(
                             f'Attempting to convert a field ("{field["name"]}") that has not been cast to a number'
