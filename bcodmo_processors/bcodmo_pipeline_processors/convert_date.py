@@ -70,14 +70,14 @@ def process_resource(rows, missing_data_values):
                             input_field = input_d['field']
                             if input_field not in row:
                                 raise Exception(f'Input field {input_field} not found: {row}')
-                            if row[input_field] not in missing_data_values:
-                                row_value += f' {row[input_field]}'
-                                input_format += f' {input_d["format"]}'
-                            else:
+                            if row[input_field] in missing_data_values or row[input_field] is None:
                                 # There is a value in missing_data_values
                                 # per discussion with data managers, set entire row to None
                                 row_value = None
                                 break
+
+                            row_value += f' {row[input_field]}'
+                            input_format += f' {input_d["format"]}'
 
                     # Backwards compatability with a single input field
                     elif 'input_field' in field:
