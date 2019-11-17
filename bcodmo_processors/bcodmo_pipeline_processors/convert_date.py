@@ -35,7 +35,8 @@ def modify_datapackage(datapackage_):
             ]
             new_fields = [{
                 'name': f['output_field'],
-                'type': 'string',
+                'type': 'datetime',
+                'outputFormat': f['output_format']
             } for f in fields]
             datapackage_fields += new_fields
             resource_['schema']['fields'] = datapackage_fields
@@ -143,19 +144,22 @@ def process_resource(rows, missing_data_values):
                     if year:
                         date_obj = date_obj.replace(year=int(year))
                     if not output_timezone:
-                        output_date_string = date_obj.strftime(output_format)
+                        output_date_obj = date_obj
                     elif output_timezone == 'UTC' and output_timezone_utc_offset:
                         # Handle UTC offset timezones differently
-                        output_date_string = date_obj.astimezone(
+                        output_date_obj = date_obj.astimezone(
                             tzoffset('UTC', output_timezone_utc_offset * 60 * 60)
-                        ).strftime(output_format)
+                        )
                     else:
                         output_timezone_obj = pytz.timezone(output_timezone)
-                        output_date_string = date_obj.astimezone(output_timezone_obj).strftime(output_format)
+                        output_date_obj = date_obj.astimezone(output_timezone_obj)
+                    # TODO: Fix this for output_date_obj, probably as a dump_to_path parameter
+                    '''
                     # Python datetime uses UTC as the timezone string, ISO requires Z
                     if output_timezone == 'UTC':
-                        output_date_string = output_date_string.replace('UTC', 'Z')
-                    row[output_field] = output_date_string
+                        output_date_obj = output_date_string.replace('UTC', 'Z')
+                    '''
+                    row[output_field] = output_date_obj
 
                 elif field['input_type'] == 'excel':
                     '''
@@ -181,9 +185,8 @@ def process_resource(rows, missing_data_values):
                         row_value = float(row_value)
                     except ValueError:
                         raise Exception(f'Row value {row_value} could not be converted to a number')
-                    date_obj = EXCEL_START_DATE + timedelta(days=row_value)
-                    output_date_string = date_obj.strftime(output_format)
-                    row[output_field] = output_date_string
+                    output_date_obj = EXCEL_START_DATE + timedelta(days=row_value)
+                    row[output_field] = output_date_obj
 
                 else:
                     raise Exception(f'Invalid input {field["input_type"]}')
