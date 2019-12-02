@@ -1,5 +1,6 @@
 import sys
 import logging
+from datetime import datetime
 from dateutil import parser
 from pyparsing import (
     Regex, Group, operatorPrecedence,
@@ -60,13 +61,17 @@ def parse_boolean(row_counter, res, row, missing_data_values):
             return res[1:-1]
 
         try:
-            return float((res.format(**row)))
+            val = res.format(**row)
+            if isinstance(val, datetime):
+                return val
+            return float(val)
         except ValueError:
             try:
                 val = res.format(**row)
                 # Handle val being part of missing_data_Values
                 if val in missing_data_values or val is None or (val == 'None' and row[res[1:-1]] == None):
                     return None
+                # Parse into datetime
                 return parser.parse(val)
             except ValueError:
                 return val
@@ -86,7 +91,6 @@ def parse_boolean(row_counter, res, row, missing_data_values):
             else:
                 first_parsed = parse_boolean(row_counter, first_value, row, missing_data_values)
                 second_parsed = parse_boolean(row_counter, term, row, missing_data_values)
-                logging.info(f'{first_parsed}, {second_parsed}, {type(first_parsed)}, {type(second_parsed)}')
                 if operation == '>':
                     first_value = first_parsed > second_parsed
                 elif operation == '>=':
