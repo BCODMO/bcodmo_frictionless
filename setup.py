@@ -3,8 +3,8 @@ from setuptools import setup, find_packages
 required = [
     'datapackage-pipelines==2.1.10',
     'pyparsing==2.2.0',
-    'dataflows @ git+https://git@github.com/BCODMO/bcodmo_dataflows.git@master',
-    'tabulator==1.30.0',
+    'dataflows @ git+https://git@github.com/datahq/dataflows.git@efcfc0dd438125d1e75ae86a683685dad2e474d5',
+    'tabulator==1.31.0',
     'pandas',
 
 ]
