@@ -9,7 +9,7 @@ import os
 from dataflows.helpers.resource_matcher import ResourceMatcher
 
 
-def concatenator(resources, all_target_fields, field_mapping, include_source_name, source_field_name):
+def concatenator(resources, all_target_fields, field_mapping, include_source_names):
     for resource_ in resources:
         res_name = resource_.res.name
         path_name = resource_.res._Resource__current_descriptor['dpp:streamedFrom']
@@ -24,12 +24,13 @@ def concatenator(resources, all_target_fields, field_mapping, include_source_nam
                         if k in field_mapping]
                 assert len(values) > 0
                 processed.update(dict(values))
-                if include_source_name == 'resource':
-                    processed[source_field_name] = res_name
-                if include_source_name == 'path':
-                    processed[source_field_name] = path_name
-                if include_source_name == 'file':
-                    processed[source_field_name] = file_name
+                for source in include_source_names:
+                    if source['type'] == 'resource':
+                        processed[source['column_name']] = res_name
+                    if source['type'] == 'path':
+                        processed[source['column_name']] = path_name
+                    if source['type'] == 'file':
+                        processed[source['column_name']] = file_name
                 yield processed
             except Exception as e:
                 raise type(e)(
@@ -43,8 +44,7 @@ def concatenate(
     fields,
     target={},
     resources=None,
-    include_source_name=False,
-    source_field_name='source_name',
+    include_source_names=[],
     missing_values=[],
 ):
 
@@ -76,8 +76,9 @@ def concatenate(
 
         # Create the schema for the target resource
         needed_fields = sorted(fields.keys())
-        if include_source_name and source_field_name in needed_fields:
-            raise Exception(f'source_field_name "{source_field_name}" field name already exists')
+        for source in include_source_names:
+            if source['column_name'] in needed_fields:
+                raise Exception(f"source_field_name \"{source['column_name']}\" field name already exists")
         for resource in package.pkg.descriptor['resources']:
             if not matcher.match(resource['name']):
                 continue
@@ -104,9 +105,9 @@ def concatenate(
                 name=name, type='string'
             ))
 
-        if include_source_name:
+        for source in include_source_names:
             target['schema']['fields'].append({
-                'name': source_field_name,
+                'name': source['column_name'],
                 'type': 'string',
             })
 
@@ -158,8 +159,7 @@ def concatenate(
                     resource_chain,
                     needed_fields,
                     field_mapping,
-                    include_source_name,
-                    source_field_name,
+                    include_source_names,
                 )
             else:
                 yield resource
@@ -167,13 +167,20 @@ def concatenate(
     return func
 
 def flow(parameters):
+    # Support deprecated include_source_name
+    include_source_names = parameters.get('include_source_names', [])
+    if parameters.get('include_source_name', False) and not len(include_source_names):
+        include_source_names = [{
+            'type': parameters.get('include_source_name', False),
+            'column_name': parameters.get('source_field_name', 'source_name'),
+        }]
+
     return Flow(
         concatenate(
             parameters.get('fields', {}),
             parameters.get('target', {}),
             parameters.get('sources'),
-            parameters.get('include_source_name', False),
-            parameters.get('source_field_name', 'source_name'),
+            include_source_names,
             parameters.get('missing_values', []),
         ),
         update_resource(
