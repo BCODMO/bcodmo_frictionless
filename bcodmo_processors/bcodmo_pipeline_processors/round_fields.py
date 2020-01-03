@@ -67,7 +67,7 @@ def process_resource(rows, missing_data_values, schema):
                             continue
                         orig_type = type(orig_val)
                         if orig_type is not Decimal:
-                            orig_val = Decimal(str(origin_val))
+                            orig_val = Decimal(str(orig_val))
                         digits = int(field.get('digits'))
 
                         if field.get('maximum_precision', False):
@@ -83,7 +83,7 @@ def process_resource(rows, missing_data_values, schema):
                             rounded_val = remove_trailing_zeros(rounded_val)
 
                         if field.get('convert_to_integer', False) and field['digits'] == 0:
-                            rounded_val = int(new_val)
+                            rounded_val = int(rounded_val)
 
                         row[field['name']] = rounded_val
                     else:

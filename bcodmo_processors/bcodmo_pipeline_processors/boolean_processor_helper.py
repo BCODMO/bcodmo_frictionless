@@ -7,6 +7,7 @@ from pyparsing import (
     opAssoc, Literal, Forward,
     ZeroOrMore, ParseException,
 )
+from decimal import Decimal, InvalidOperation
 
 NULL_VALUES = ['null', 'NULL', 'None', 'NONE']
 ROW_NUMBER = ['ROW_NUMBER', 'LINE_NUMBER']
@@ -47,8 +48,8 @@ def parse_boolean(row_counter, res, row, missing_data_values):
         return res
     # Try to convert to float
     try:
-        return float(res)
-    except (ValueError, TypeError):
+        return Decimal(res)
+    except (ValueError, TypeError, InvalidOperation):
         pass
     # Parse string
     if type(res) == str:
@@ -64,8 +65,8 @@ def parse_boolean(row_counter, res, row, missing_data_values):
             val = res.format(**row)
             if isinstance(val, datetime):
                 return val
-            return float(val)
-        except ValueError:
+            return Decimal(val)
+        except (ValueError, InvalidOperation):
             try:
                 val = res.format(**row)
                 # Handle val being part of missing_data_Values
@@ -156,14 +157,14 @@ def parse_math(row_counter, res, row, missing_data_values):
     ''' Parse a math result from pyparser '''
     # Try to convert to float
     try:
-        return float(res)
-    except (ValueError, TypeError):
+        return Decimal(res)
+    except (ValueError, TypeError, InvalidOperation):
         pass
     # Parse string
     if type(res) == str:
         try:
-            return float((res.format(**row)))
-        except ValueError:
+            return Decimal((res.format(**row)))
+        except (ValueError, InvalidOperation):
             try:
                 val = res.format(**row)
                 if val in ['+', '-', '*', '/', '^']:
