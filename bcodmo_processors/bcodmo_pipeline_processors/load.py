@@ -1,5 +1,6 @@
 import xlrd
 import re
+import glob
 from dataflows import Flow, load
 from datapackage_pipelines.wrapper import ingest
 from datapackage_pipelines.utilities.flow_utils import spew_flow
@@ -15,7 +16,6 @@ custom_parsers = {
 
 
 def flow(parameters, datapackage):
-    _from = parameters.pop('from')
     _input_separator = parameters.pop('input_separator', ',')
     _remove_empty_rows = parameters.pop('remove_empty_rows', False)
     if parameters.get('format') == 'bcodmo-fixedwidth':
@@ -74,10 +74,17 @@ def flow(parameters, datapackage):
                     yield r
         return func
 
+    _from = parameters.pop('from')
+    from_list = _from.split(_input_separator)
+    input_path_pattern = parameters.pop('input_path_pattern', False)
+    if input_path_pattern:
+        from_list = glob.glob(_from)
+        if not len(from_list):
+            raise Exception(f'No files found with the pattern {_from})')
     params = []
     _name = parameters.pop('name', '')
     name_len = len(_name.split(_input_separator))
-    from_len = len(_from.split(_input_separator))
+    from_len = len(from_list)
     if _name and name_len is not from_len:
         raise Exception(
             f'The comma seperated list of names has length {name_len} and the list of urls has length {from_len}. They must be equal'
@@ -95,7 +102,7 @@ def flow(parameters, datapackage):
         names = _name.split(_input_separator)
 
     # Get comma seperated file names/urls
-    for i, url in enumerate(_from.split(_input_separator)):
+    for i, url in enumerate(from_list):
         # Default the name to res[1-n]
         resource_name = names[i]
 
@@ -112,7 +119,7 @@ def flow(parameters, datapackage):
             for sheet_name in sheet_names:
                 if re.match(sheet_regex, sheet_name):
                     new_name = re.sub('[^-a-z0-9._]', '', sheet_name.lower())
-                    if len(_from.split(_input_separator)) > 1:
+                    if len(from_list) > 1:
                         # If there are multiple urls being loaded, have the name take that into account
                         new_name = f'{resource_name}-{new_name}'
                     params.extend([
