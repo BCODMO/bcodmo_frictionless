@@ -67,7 +67,7 @@ def process_resource(rows, missing_data_values, schema):
                             continue
                         orig_type = type(orig_val)
                         if orig_type is not Decimal:
-                            orig_val = Decimal(str(origin_val))
+                            orig_val = Decimal(str(orig_val))
                         digits = int(field.get('digits'))
 
                         if field.get('maximum_precision', False):
