@@ -83,7 +83,7 @@ def process_resource(rows, missing_data_values, schema):
                             rounded_val = remove_trailing_zeros(rounded_val)
 
                         if field.get('convert_to_integer', False) and field['digits'] == 0:
-                            rounded_val = int(new_val)
+                            rounded_val = int(rounded_val)
 
                         row[field['name']] = rounded_val
                     else:
