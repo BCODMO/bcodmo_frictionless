@@ -59,17 +59,23 @@ def flow(parameters, datapackage):
     def remove_empty_rows(name):
         def func(package):
             yield package.pkg
-            def process_resource(rows):
+            def process_resource(rows, missing_data_values):
                 for row in rows:
                     for value in row.values():
-                        if value:
+                        if value and value not in missing_data_values:
                             # Only yield if something in the row has a value
                             yield row
                             break
 
             for r in package:
                 if r.res.name == name:
-                    yield process_resource(r)
+                    missing_data_values = r.res.descriptor.get(
+                        'schema', {},
+                    ).get(
+                        'missingValues', [],
+                    )
+
+                    yield process_resource(r, missing_data_values)
                 else:
                     yield r
         return func
