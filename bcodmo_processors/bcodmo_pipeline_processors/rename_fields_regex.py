@@ -49,8 +49,9 @@ def process_resource(rows):
                 )
                 if new_field_name is not field and new_field_name in row:
                     raise Exception(f'New field name {new_field_name} already exists in row {row.keys()}')
-                value = row[field]
-                del row[field]
+                value = row.get(field, None)
+                if field in row:
+                    del row[field]
                 row[new_field_name] = value
             yield row
         except Exception as e:
