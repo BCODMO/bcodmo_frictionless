@@ -67,13 +67,14 @@ def parse_boolean(row_counter, res, row, missing_data_values):
                 return val
             return Decimal(val)
         except (ValueError, InvalidOperation):
+            logging.info(f'Working on val: {val}')
             try:
                 val = res.format(**row)
                 # Handle val being part of missing_data_Values
                 if val in missing_data_values or val is None or (val == 'None' and row[res[1:-1]] == None):
                     return None
                 # Parse into datetime
-                return parser.parse(val)
+                return val
             except ValueError:
                 return val
 
