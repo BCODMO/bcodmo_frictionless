@@ -7,6 +7,7 @@ from pyparsing import (
     Regex, Group, operatorPrecedence,
     opAssoc, Literal, Forward,
     ZeroOrMore, ParseException,
+    ParseResults,
 )
 from decimal import Decimal, InvalidOperation
 
@@ -46,7 +47,7 @@ boolean_expr = operatorPrecedence(
 
 def parse_boolean(row_counter, res, row, missing_data_values):
     ''' Parse a boolean result from pyparser '''
-    if type(res) in [bool, Decimal, float, int]:
+    if type(res) in [bool, Decimal, float, int, datetime]:
         return res
     # Parse string
     elif type(res) == str:
@@ -59,8 +60,6 @@ def parse_boolean(row_counter, res, row, missing_data_values):
             return re.compile(res[3:-1])
         if res.startswith("'") and res.endswith("'"):
             return res[1:-1]
-        if res.replace('.', '', 1).isdigit():
-            return Decimal(res)
         if res.startswith("{") and res.endswith("}"):
             key = res[1:-1]
             if key not in row:
@@ -73,6 +72,15 @@ def parse_boolean(row_counter, res, row, missing_data_values):
             if val in missing_data_values or val is None or (val == 'None' and row[res[1:-1]] == None):
                 return None
             return val
+        if res.replace('.', '', 1).isdigit():
+            return Decimal(res)
+        # Try to convert to a date
+        try:
+            return parser.parse(res)
+        except Exception as e:
+            raise e
+    if type(res) is not ParseResults:
+        raise Exception(f'Unable to parse value: {res}')
 
     if len(res) == 0:
         return False
@@ -82,6 +90,7 @@ def parse_boolean(row_counter, res, row, missing_data_values):
     operation = None
     try:
         for term in res:
+
             if not first_value:
                 first_value = term
             elif not operation:
