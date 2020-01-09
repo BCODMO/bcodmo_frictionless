@@ -120,12 +120,12 @@ def parse_boolean(row_counter, res, row, missing_data_values):
                 elif operation == '<=':
                     first_value = first_parsed <= second_parsed
                 elif operation == '!=' or operation == '==':
-                    if type(first_parsed) is re.Pattern:
+                    if isinstance(first_parsed, Pattern):
                         if second_parsed is None:
                             first_value = False
                         else:
                             first_value = first_parsed.match(second_parsed)
-                    elif type(second_parsed) is re.Pattern:
+                    elif isinstance(second_parsed, Pattern):
                         if first_parsed is None:
                             first_value = False
                         else:
