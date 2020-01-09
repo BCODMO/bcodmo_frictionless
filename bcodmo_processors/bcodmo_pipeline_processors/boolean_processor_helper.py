@@ -1,4 +1,5 @@
 import sys
+from typing import Pattern
 import logging
 import re
 from datetime import datetime
@@ -103,8 +104,8 @@ def parse_boolean(row_counter, res, row, missing_data_values):
                 f_type = type(first_parsed)
                 s_type = type(second_parsed)
                 if (
-                    (f_type is re.Pattern and s_type not in [str, type(None)])
-                    or (s_type is re.Pattern and f_type not in [str, type(None)])
+                    (isinstance(first_parsed, Pattern) and s_type not in [str, type(None)])
+                    or (isinstance(second_parsed, Pattern) and f_type not in [str, type(None)])
                 ):
                     raise Exception(
                         f'For regular expression boolean comparison the other value has to be of type string: {f_type} and {s_type}'
