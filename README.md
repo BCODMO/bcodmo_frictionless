@@ -89,13 +89,15 @@ _Parameters_:
 
 _Notes_:
 
-- boolean string is made up of an number of conditions and boolean comparisons. Conditions are made up of comparison term, operator, comparision term. A comparison term can be a date, a number, a variable (contained within curly braces {}), a string (contained within single quotes ''), LINE_NUMBER, or null (can be one of None, NONE, null or NULL). An operator can be one of >=, >, <=, <, != or ==. Boolean comparison can be any one of AND, and, &&, OR, or, ||. All terms and operators must be seperated by spaces.
+- boolean string is made up of an number of conditions and boolean comparisons. Conditions are made up of comparison term, operator, comparision term. A comparison term can be a date, a number, a variable (contained within curly braces {}), a regular expression (contained within re''), a string (contained within single quotes ''), LINE_NUMBER, or null (can be one of None, NONE, null or NULL). An operator can be one of >=, >, <=, <, != or ==. Boolean comparison can be any one of AND, and, &&, OR, or, ||. All terms and operators must be seperated by spaces.
   - For example:
     - {lat} > 50 && {depth} != NULL
     - {species} == 's. pecies' OR {species} == NULL
 - functions are evaluated in the order they are passed in. So if function 0 and function 3 both evaluate as true for row 30, the value in function 3 will show up in row 30.
+- Regular expression can only be used with the == and != operators and must be compared to a string.
 - Use curly braces {} to match field names in the row
 - If `math_operation` is set to true, the operators +, -, *, / and ^ can be used to set the value to the result of a mathematical operation. Order of operations are as expected and parentheses can be used to group operations.
+- Values will be interpreted based on the type. If a field of type string looks like '5313' it will not equal the number 5313, but rather only the string '5313'.
 
 ### ***`bcodmo_pipeline_processors.boolean_filter_rows`***
 

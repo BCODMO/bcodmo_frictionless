@@ -1,11 +1,13 @@
 import sys
 import logging
+import re
 from datetime import datetime
 from dateutil import parser
 from pyparsing import (
     Regex, Group, operatorPrecedence,
     opAssoc, Literal, Forward,
     ZeroOrMore, ParseException,
+    ParseResults,
 )
 from decimal import Decimal, InvalidOperation
 
@@ -22,11 +24,12 @@ math_operator = Regex(">=|<=|!=|>|<|==").setName("math_operator")
 date = Regex("(\d+[/:\- ])+(\d+)?")
 number = Regex(r"[+-]?\d+(:?\.\d*)?(:?[eE][+-]?\d+)?")
 variable = Regex(r"\{.*?\}")
+regex = Regex(r"re'.*?'")
 string = Regex(r"'.*?'")
 null = Regex('|'.join(NULL_VALUES))
 row_number = Regex('|'.join(ROW_NUMBER))
 
-boolean_comparison_term = date | number | variable | string | null | row_number
+boolean_comparison_term = date | number | variable | regex | string | null | row_number
 boolean_condition = Group(
     boolean_comparison_term + boolean_operator + boolean_comparison_term,
 )
@@ -44,39 +47,40 @@ boolean_expr = operatorPrecedence(
 
 def parse_boolean(row_counter, res, row, missing_data_values):
     ''' Parse a boolean result from pyparser '''
-    if type(res) == bool:
+    if type(res) in [bool, Decimal, float, int, datetime]:
         return res
-    # Try to convert to float
-    try:
-        return Decimal(res)
-    except (ValueError, TypeError, InvalidOperation):
-        pass
     # Parse string
-    if type(res) == str:
+    elif type(res) == str:
         # Handle null passed in
         if res in NULL_VALUES:
             return None
         if res in ROW_NUMBER:
             return row_counter
+        if res.startswith("re'") and res.endswith("'"):
+            return re.compile(res[3:-1])
         if res.startswith("'") and res.endswith("'"):
             return res[1:-1]
-
-        try:
-            val = res.format(**row)
+        if res.startswith("{") and res.endswith("}"):
+            key = res[1:-1]
+            if key not in row:
+                raise Exception(f'Invalid field name {key}')
+            val = row[key]
             if isinstance(val, datetime):
                 return val
-            return Decimal(val)
-        except (ValueError, InvalidOperation):
-            logging.info(f'Working on val: {val}')
-            try:
-                val = res.format(**row)
-                # Handle val being part of missing_data_Values
-                if val in missing_data_values or val is None or (val == 'None' and row[res[1:-1]] == None):
-                    return None
-                # Parse into datetime
-                return val
-            except ValueError:
-                return val
+            if type(val) in [Decimal, float, int]:
+                return Decimal(val)
+            if val in missing_data_values or val is None or (val == 'None' and row[res[1:-1]] == None):
+                return None
+            return val
+        if res.replace('.', '', 1).isdigit():
+            return Decimal(res)
+        # Try to convert to a date
+        try:
+            return parser.parse(res)
+        except Exception as e:
+            raise e
+    if type(res) is not ParseResults:
+        raise Exception(f'Unable to parse value: {res}')
 
     if len(res) == 0:
         return False
@@ -86,6 +90,7 @@ def parse_boolean(row_counter, res, row, missing_data_values):
     operation = None
     try:
         for term in res:
+
             if not first_value:
                 first_value = term
             elif not operation:
@@ -93,6 +98,18 @@ def parse_boolean(row_counter, res, row, missing_data_values):
             else:
                 first_parsed = parse_boolean(row_counter, first_value, row, missing_data_values)
                 second_parsed = parse_boolean(row_counter, term, row, missing_data_values)
+
+                # Throw error for invalid regex comparision
+                f_type = type(first_parsed)
+                s_type = type(second_parsed)
+                if (
+                    (f_type is re.Pattern and s_type not in [str, type(None)])
+                    or (s_type is re.Pattern and f_type not in [str, type(None)])
+                ):
+                    raise Exception(
+                        f'For regular expression boolean comparison the other value has to be of type string: {f_type} and {s_type}'
+                    )
+
                 if operation == '>':
                     first_value = first_parsed > second_parsed
                 elif operation == '>=':
@@ -101,10 +118,21 @@ def parse_boolean(row_counter, res, row, missing_data_values):
                     first_value = first_parsed < second_parsed
                 elif operation == '<=':
                     first_value = first_parsed <= second_parsed
-                elif operation == '!=':
-                    first_value = first_parsed != second_parsed
-                elif operation == '==':
-                    first_value = first_parsed == second_parsed
+                elif operation == '!=' or operation == '==':
+                    if type(first_parsed) is re.Pattern:
+                        if second_parsed is None:
+                            first_value = False
+                        else:
+                            first_value = first_parsed.match(second_parsed)
+                    elif type(second_parsed) is re.Pattern:
+                        if first_parsed is None:
+                            first_value = False
+                        else:
+                            first_value = second_parsed.match(first_parsed)
+                    else:
+                        first_value = first_parsed == second_parsed
+                    if operation == '!=':
+                        first_value = not first_value
                 elif operation in ['AND', 'and', '&&']:
                     first_value = first_parsed and second_parsed
                 elif operation in ['OR', 'or', '||']:
@@ -157,25 +185,26 @@ math_expr = operatorPrecedence(
 def parse_math(row_counter, res, row, missing_data_values):
     ''' Parse a math result from pyparser '''
     # Try to convert to float
-    try:
+    if type(res) in [Decimal, float, int]:
         return Decimal(res)
-    except (ValueError, TypeError, InvalidOperation):
-        pass
     # Parse string
-    if type(res) == str:
+    elif type(res) == str:
+        if res.startswith("{") and res.endswith("}"):
+            key = res[1:-1]
+            if key not in row:
+                raise Exception(f'Invalid field name {key}')
+            val = row[key]
+            if val in missing_data_values or val is None:
+                return None
+            if type(val) in [Decimal, float, int]:
+                return Decimal(val)
+            raise Exception(f'Field {key} is not a number or integer')
+        if res in ['+', '-', '*', '/', '^']:
+            return res
         try:
-            return Decimal((res.format(**row)))
-        except (ValueError, InvalidOperation):
-            try:
-                val = res.format(**row)
-                if val in ['+', '-', '*', '/', '^']:
-                    return val
-                # Handle val being part of missing_data_Values
-                if val in missing_data_values or val is None or (val == 'None' and row[res[1:-1]] == None):
-                    return None
-                raise Exception(f'String {res} has a value of {val} which cannot be parsed to a number or NoneType')
-            except ValueError:
-                raise Exception(f'String {res} has no corresponding field in the row')
+            return Decimal(res)
+        except InvalidOperation:
+            raise Exception(f'Invalid input to math operation: {res}')
 
     if len(res) == 0:
         return None
