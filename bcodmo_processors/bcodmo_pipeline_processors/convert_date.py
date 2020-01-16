@@ -60,8 +60,13 @@ def process_resource(rows, missing_data_values):
                 output_format = field.get('output_format', None)
                 if not output_format:
                     raise Exception('Output format is required')
+                if not line_passed:
+                    if output_field in row:
+                        row[output_field] = row[output_field]
+                    else:
+                        row[output_field] = None
 
-                if 'input_type' not in field or field['input_type'] == 'python':
+                elif 'input_type' not in field or field['input_type'] == 'python':
                     row_value = ''
                     input_format = ''
                     # Support multiple input fields
@@ -91,13 +96,6 @@ def process_resource(rows, missing_data_values):
                         input_format = field['input_format']
                     else:
                         raise Exception('One of input_field or inputs is required')
-
-                    if not line_passed:
-                        if output_field in row:
-                            row[output_field] = row[output_field]
-                        else:
-                            row[output_field] = None
-                        continue
 
                     if row_value in missing_data_values or row_value is None:
                         row[output_field] = row_value
