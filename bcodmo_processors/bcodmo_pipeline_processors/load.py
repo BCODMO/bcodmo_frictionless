@@ -1,6 +1,8 @@
 import xlrd
 import re
 import glob
+import sys
+
 from dataflows import Flow, load
 from datapackage_pipelines.wrapper import ingest
 from datapackage_pipelines.utilities.flow_utils import spew_flow
@@ -16,8 +18,12 @@ custom_parsers = {
 
 
 def flow(parameters, datapackage):
+    sys.setrecursionlimit(10000)
     _input_separator = parameters.pop('input_separator', ',')
     _remove_empty_rows = parameters.pop('remove_empty_rows', False)
+    _recursion_limit = parameters.pop('recursion_limit', False)
+    if _recursion_limit:
+        sys.setrecursionlimit(_recursion_limit)
     if parameters.get('format') == 'bcodmo-fixedwidth':
         # With fixed width files, we want to also send the sample_size
         # and skip_rows parameters to the parser (not just the stream)
