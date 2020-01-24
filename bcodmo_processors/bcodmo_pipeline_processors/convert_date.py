@@ -3,9 +3,11 @@ from datapackage_pipelines.wrapper import ingest, spew
 from dataflows.helpers.resource_matcher import ResourceMatcher
 from datetime import datetime, timedelta
 from dateutil.tz import tzoffset
+from decimal import Decimal, InvalidOperation
 import logging
 import pytz
 import re
+import math
 
 from boolean_processor_helper import (
     get_expression,
@@ -159,12 +161,13 @@ def process_resource(rows, missing_data_values):
                     '''
                     row[output_field] = output_date_obj
 
-                elif field['input_type'] == 'excel':
+                elif field['input_type'] == 'excel' or field['input_type'] == 'decimalDay':
                     '''
-                    Handle excel number datetimes
+                    Handle excel number and decimal as day of year datetimes
 
                     takes in input_field, output_field and output_format
-                    but does not take any other parameters from python input_type
+                        - decimalDay also takes in Year
+                    Does not take any other parameters from python input_type
                     '''
                     row_value = None
                     if 'input_field' in field:
@@ -179,11 +182,43 @@ def process_resource(rows, missing_data_values):
                         row[output_field] = row_value
                         continue
 
+                    # Convert the row to a number
                     try:
-                        row_value = float(row_value)
-                    except ValueError:
+                        if field['input_type'] == 'excel':
+                            row_value = float(row_value)
+                        else:
+                            row_value = Decimal(row_value)
+                    except (ValueError, InvalidOperation):
                         raise Exception(f'Row value {row_value} could not be converted to a number')
-                    output_date_obj = EXCEL_START_DATE + timedelta(days=row_value)
+
+                    # Do the math to convert to a date
+                    if field['input_type'] == 'excel':
+                        output_date_obj = EXCEL_START_DATE + timedelta(days=row_value)
+                    else:
+                        year = field.get('year', None)
+                        if not year:
+                            raise Exception('Year is required for decimal day input type')
+                        # Function to get the left and right side of a number in separate variables
+                        f = lambda x : (math.floor(x), x - math.floor(x))
+
+                        # Handle Days
+                        days, x = f(row_value)
+                        # Handle hours
+                        hours, x = f(x * 24)
+                        # Handle minutes
+                        minutes, x = f(x * 60)
+                        # Handle seconds
+                        seconds, x = f(x * 60)
+                        # Handle microseconds
+                        microseconds, _ = f(x * 1000000)
+
+                        # Have to use strptime because its the only function that takes in day of year (no month)
+                        output_date_obj = datetime.strptime(
+                            f'{year}:{days}:{hours}:{minutes}:{seconds}:{microseconds}',
+                            '%Y:%j:%H:%M:%S:%f',
+                        )
+
+                    # Set output field
                     row[output_field] = output_date_obj
 
                 else:
