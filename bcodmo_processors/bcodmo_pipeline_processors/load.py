@@ -130,7 +130,7 @@ def flow(parameters, datapackage):
             sheet_regex = parameters.pop('sheet', '')
             for sheet_name in sheet_names:
                 if re.match(sheet_regex, sheet_name):
-                    new_name = re.sub('[^-a-z0-9._]', '', sheet_name.lower())
+                    new_name = re.sub('[^-a-z0-9._]', '', re.sub(r"\s+", '_', sheet_name.lower()))
                     if len(from_list) > 1:
                         # If there are multiple urls being loaded, have the name take that into account
                         new_name = f'{resource_name}-{new_name}'
