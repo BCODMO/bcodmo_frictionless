@@ -73,7 +73,7 @@ def parse_boolean(row_counter, res, row, missing_data_values):
             if val in missing_data_values or val is None or (val == 'None' and row[res[1:-1]] == None):
                 return None
             return val
-        if res.replace('.', '', 1).isdigit():
+        if res.replace('.', '', 1).strip().isdigit():
             return Decimal(res)
         # Try to convert to a date
         try:
