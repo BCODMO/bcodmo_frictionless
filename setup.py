@@ -4,7 +4,7 @@ required = [
     'datapackage-pipelines==2.1.10',
     'pyparsing==2.2.0',
     'dataflows==0.0.65',
-    'tabulator==1.31.2',
+    'tabulator==1.34.0',
     'pandas',
 
 ]
