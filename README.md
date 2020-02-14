@@ -1,10 +1,12 @@
 # bcodmo_processors
+
 Custom datapackage-pipelines processors for BCODMO
 
 To run the dpp command locally using the custom processors located in this repository, simply clone this reposistory and add the environment variable DPP_PROCESSOR_PATH.
 If this repository is located at $PROCESSOR_REPO, the environment variable will be $PROCESSOR_REPO/bcodmo_processors.
 
-You can add environment variables manually using export DPP_PROCESSOR_PATH=$PUT_PATH_HERE or you can place all of your environment variables in a .env file and run the following commands:
+You can add environment variables manually using export DPP_PROCESSOR_PATH=\$PUT_PATH_HERE or you can place all of your environment variables in a .env file and run the following commands:
+
 ```
 set -a
 source .env
@@ -12,14 +14,13 @@ source .env
 
 Now when using dpp it will first look inside this repository when resolving processors.
 
-
-If you want to get rid of the bcodmo_pipeline_processors prefix you can instead set DPP_PROCESSOR_PATH to $PROCESSOR_REPO/bcodmo_processors/bcodmo_pipeline_processors.
+If you want to get rid of the bcodmo_pipeline_processors prefix you can instead set DPP_PROCESSOR_PATH to \$PROCESSOR_REPO/bcodmo_processors/bcodmo_pipeline_processors.
 
 ## The BCODMO Processor Library
 
-See https://github.com/frictionlessdata/datapackage-pipelines for documentation for standard processors. 
+See https://github.com/frictionlessdata/datapackage-pipelines for documentation for standard processors.
 
-### ***`bcodmo_pipeline_processors.load`***
+### **_`bcodmo_pipeline_processors.load`_**
 
 Loads data into the package. Similar to the standard processor load.
 
@@ -41,7 +42,7 @@ _Other differences from the standard load_:
 
 See standard processor for examples.
 
-### ***`bcodmo_pipeline_processors.concatenate`***
+### **_`bcodmo_pipeline_processors.concatenate`_**
 
 Concatenate a number of streamed resouces into a single resource. Similar to the standard processor concatenate.
 
@@ -49,14 +50,14 @@ _Parameters_:
 
 - All parameters from the [standard processor concatenate](https://github.com/frictionlessdata/datapackage-pipelines#concatenate)
 - `include_source_name` - whether or not a source name should be included as a field in the resulting resource. Can be one of False, 'resource', 'path' or 'file'.
-    - 'resource' will add the resource name as a field
-    - 'path' will add the path or url that was originally used to load the resource
-    - 'file' will add the filename from the original resource
+  - 'resource' will add the resource name as a field
+  - 'path' will add the path or url that was originally used to load the resource
+  - 'file' will add the filename from the original resource
 - `source_field_name` - the name of the new field created by include_source_name. Required if include_source_name is not False
 
 See standard processor for examples.
 
-### ***`bcodmo_pipeline_processors.dump_to_path`***
+### **_`bcodmo_pipeline_processors.dump_to_path`_**
 
 Dump data to a path. Similar to the standard processor dump_to_path.
 
@@ -67,12 +68,12 @@ _Parameters_:
 
 _Other differences from the standard dump_to_path_:
 
-- an attempt is made to change file permissions to 775 
+- an attempt is made to change file permissions to 775
 - carriage return \r at line endings are removed
 
 See standard processor for examples.
 
-### ***`bcodmo_pipeline_processors.boolean_add_computed_field`***
+### **_`bcodmo_pipeline_processors.boolean_add_computed_field`_**
 
 Add a field computed using boolean values.
 
@@ -96,10 +97,10 @@ _Notes_:
 - functions are evaluated in the order they are passed in. So if function 0 and function 3 both evaluate as true for row 30, the value in function 3 will show up in row 30.
 - Regular expression can only be used with the == and != operators and must be compared to a string.
 - Use curly braces {} to match field names in the row
-- If `math_operation` is set to true, the operators +, -, *, / and ^ can be used to set the value to the result of a mathematical operation. Order of operations are as expected and parentheses can be used to group operations.
+- If `math_operation` is set to true, the operators +, -, \*, / and ^ can be used to set the value to the result of a mathematical operation. Order of operations are as expected and parentheses can be used to group operations.
 - Values will be interpreted based on the type. If a field of type string looks like '5313' it will not equal the number 5313, but rather only the string '5313'.
 
-### ***`bcodmo_pipeline_processors.boolean_filter_rows`***
+### **_`bcodmo_pipeline_processors.boolean_filter_rows`_**
 
 Filter rows with a boolean statement
 
@@ -110,8 +111,7 @@ _Parameters_:
 
 _Notes_:
 
-
-### ***`bcodmo_pipeline_processors.convert_date`***
+### **_`bcodmo_pipeline_processors.convert_date`_**
 
 Convert any number of fields containing date information into a single date field with display format and timezone options.
 
@@ -122,10 +122,11 @@ _Parameters_:
   - `output_field` - the name of the output field
   - `output_format` - the python datetime format string for the output field
   - `input_type` - the input field type. One of 'python' or 'excel'. If 'python', evaluate the input field/fields using python format strings. If 'excel', only take in a single input field and evaluate it as an excel date serial number.
-  - `input_field` - a single input field. Only use if `input_type` is 'excel'. Depecrated if `input_type` is 'python'. 
+  - `input_field` - a single input field. Only use if `input_type` is 'excel'. Depecrated if `input_type` is 'python'.
 - `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
 
-   ***the rest of the parameters are only relevant if input_type is 'python'***
+  **_the rest of the parameters are only relevant if input_type is 'python'_**
+
   - `inputs` - a list of input fields
     - `field` - the input field name
     - `format` - the format of this input field
@@ -135,13 +136,12 @@ _Parameters_:
   - `output_timezone_utc_offset` - UTC offset for the output timezone. Optional
   - `input_format` - deprecated, for use with `input_field` if `input_type` is 'python'
 
-
 _Notes_:
 
-- The output type is string until the [date type dump_to_path issue](https://github.com/BCODMO/frictionless-usecases/issues/19) is resolved 
+- The output type is string until the [date type dump_to_path issue](https://github.com/BCODMO/frictionless-usecases/issues/19) is resolved
 - If the `output_field` already exists in the schema, the existing values will be overwritten
 
-### ***`bcodmo_pipeline_processors.convert_to_decimal_degrees`***
+### **_`bcodmo_pipeline_processors.convert_to_decimal_degrees`_**
 
 Convert a single field containing coordinate information from degrees-minutes-seconds or degrees-decimal_minutes to decimal_degrees.
 
@@ -149,13 +149,12 @@ _Parameters_:
 
 - `resources` - a list of resources to perform this operation on
 - `fields` - a list of new_fields
-  - `input_field` - the name of the input field 
+  - `input_field` - the name of the input field
   - `output_field` - the name of the output field
   - `input_format` - the input format. One of 'degrees-minutes-seconds' or 'degrees-decimal_minutes'
   - `pattern` - the pattern for the input field. See notes for details
   - `directional` - the directional of the coordinate. Must be one of 'N', 'E', 'S', 'W'
 - `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
-
 
 _Notes_:
 
@@ -163,33 +162,30 @@ _Notes_:
   group is always optional.
 - if 'directional' is passed in both through the `pattern` and the `directional` parameter, the `directional` parameter takes precendence.
 
-### ***`bcodmo_pipeline_processors.remove_resources`***
+### **_`bcodmo_pipeline_processors.remove_resources`_**
 
 Remove any number of resources from the pipeline
 
 _Parameters_:
 
-- `resources` - the resources to remove 
+- `resources` - the resources to remove
 
+### **_`bcodmo_pipeline_processors.rename_fields`_**
 
-### ***`bcodmo_pipeline_processors.rename_fields`***
-
-Rename any number of fields 
+Rename any number of fields
 
 _Parameters_:
 
 - `resources` - a list of resources to perform this operation on
 - `fields` - a list of fields
-    - `old_field` - the name of the field before it is renamed
-    - `new_field` - the new name for the field
-
+  - `old_field` - the name of the field before it is renamed
+  - `new_field` - the new name for the field
 
 _Notes_:
 
 - if `new_field` already exists as a field in the resource an error will be thrown
 
-
-### ***`bcodmo_pipeline_processors.rename_fields_regex`***
+### **_`bcodmo_pipeline_processors.rename_fields_regex`_**
 
 Rename any number of fields using a regular expression
 
@@ -198,82 +194,107 @@ _Parameters_:
 - `resources` - a list of resources to perform this operation on
 - `fields` - a list of fields to perform this operation on
 - `pattern` - regular expression patterns to be usedd
-    - `find` - the find pattern for the old field name
-    - `replace` - the replace pattern for the new field name 
-
+  - `find` - the find pattern for the old field name
+  - `replace` - the replace pattern for the new field name
 
 _Notes_:
 
 - if the field name created by `replace` already exists in the resource an error will be thrown
 - regular expressions are always python regular expressions
 
-### ***`bcodmo_pipeline_processors.rename_resource`***
+### **_`bcodmo_pipeline_processors.rename_resource`_**
 
 Rename a resource
 
 _Parameters_:
 
--`old_resource` - the old name of the resource
--`new_resource` - the new name of the resource
+-`old_resource` - the old name of the resource -`new_resource` - the new name of the resource
 
-
-### ***`bcodmo_pipeline_processors.reorder_fields`***
+### **_`bcodmo_pipeline_processors.reorder_fields`_**
 
 Rename any number of fields using a regular expression
 
 _Parameters_:
 
 - `resources` - a list of resources to perform this operation on
-- `fields` - the new order of fields 
+- `fields` - the new order of fields
 
 _Notes_:
 
 - if a field does not exist in the resource an error will be thrown
 - if the number of passed in fields does not match the number of fields in the resource an error will be thrown
 
-
-### ***`bcodmo_pipeline_processors.round_fields`***
+### **_`bcodmo_pipeline_processors.round_fields`_**
 
 Round any number of fields
 
 _Parameters_:
 
 - `resources` - a list of resources to perform this operation on
-- `fields` - a list of fields to perform this operation on 
-    - `name` - the name of the field to round
-    - `digits` - the number of digits to round the field to
-    - `preserve_trailing_zeros` - whether trailing zeros should be preserved
-    - `maximum_precision` - whether values with precision lower than digits should be rounded
-    - `convert_to_integer` - whether the field should be converted to an integer
+- `fields` - a list of fields to perform this operation on
+  - `name` - the name of the field to round
+  - `digits` - the number of digits to round the field to
+  - `preserve_trailing_zeros` - whether trailing zeros should be preserved
+  - `maximum_precision` - whether values with precision lower than digits should be rounded
+  - `convert_to_integer` - whether the field should be converted to an integer
 - `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
 
 _Notes_:
 
-- As of v1.0.3, round_fields works on ONLY number types. 
+- As of v1.0.3, round_fields works on ONLY number types.
 - if attempted to use on an incorrect field type an error will be thrown
 - `convert_to_integer` parameter will only work if digits is set to 0
 
-
-### ***`bcodmo_pipeline_processors.split_column`***
+### **_`bcodmo_pipeline_processors.split_column`_**
 
 Split a field into any number of other fields
 
 _Parameters_:
 
 - `resources` - a list of resources to perform this operation on
-- `fields` - a list of fields to perform this operation on 
-    - `input_field` - the name of the field to split 
-    - `output_fields` - the names of the output fields
-    - `pattern` - the pattern to match the input_field. Use python regular expression matches (denoted by parentheses) to capture values for `output_fields` 
+- `fields` - a list of fields to perform this operation on
+  - `input_field` - the name of the field to split
+  - `output_fields` - the names of the output fields
+  - `pattern` - the pattern to match the input_field. Use python regular expression matches (denoted by parentheses) to capture values for `output_fields`
 - `delete_input` - whether the `input_field` should be deleted after the `output_fields` are created
 - `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
 
 _Notes_:
 
-- all new fields will be typed as strings 
+- all new fields will be typed as strings
 - the number of matches in `pattern` must equal the number of output fields in `output_fields`
 
-### ***`bcodmo_pipeline_processors.find_replace`***
+### **_`bcodmo_pipeline_processors.find_replace`_**
+
+Find and replace regular expression within a field. Same as standard processor other than boolean.
+
+_Parameters_:
+
+- All parameters from the [standard processor find_replace](https://github.com/frictionlessdata/datapackage-pipelines#find_replace)
+- `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
+
+_Notes_:
+
+### **_`bcodmo_pipeline_processors.string_format`_**
+
+Format a string using python string formatting
+
+_Parameters_:
+
+- `resources` - a list of resources to perform this operation on
+- `fields` - a list of fields to perform this operation on
+  - `input_field` - the name of the field to split
+  - `output_field` - the name of the output field
+  - `input_string` - the input string to be used in the python format function
+  - `input_fields` - the fields to be passed as arguments in the python format function
+- `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
+
+_Notes_:
+
+- all new fields will be typed as strings
+- the input types are important. If the field you're trying to format is an integer, you have to use something like {0:03d}. If it is a float (number), you have to use {0:03f}, etc.
+
+### **_`bcodmo_pipeline_processors.find_replace`_**
 
 Find and replace regular expression within a field. Same as standard processor other than boolean.
 

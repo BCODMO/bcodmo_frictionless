@@ -67,7 +67,7 @@ def process_resource(rows, missing_data_values):
         line_passed = check_line(expression, row_counter, row, missing_data_values)
         try:
             for field in fields:
-                # Inititalize all of the parameters that are used by both python and excel input_type
+                # Inititalize all of the parameters
                 output_field = field.get('output_field', None)
                 if not output_field:
                     raise Exception('output_field is required')
