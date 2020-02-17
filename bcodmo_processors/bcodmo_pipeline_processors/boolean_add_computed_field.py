@@ -26,23 +26,33 @@ def modify_datapackage(datapackage_):
     dp_resources = datapackage_.get('resources', [])
     for resource_ in dp_resources:
         if resources.match(resource_['name']):
-            new_fields = [
-                {
-                    'name': nf['target'],
-                    'type': nf.get('type', 'string'),
-                } for nf in fields
-            ]
+            # Get the old fields
+            datapackage_fields = resource_['schema']['fields']
 
-            def filter_old_field(field):
-                for nf in fields:
-                    if field['name'] == nf['target']:
-                        return False
-                return True
-            resource_['schema']['fields'] = list(filter(
-                filter_old_field,
-                resource_['schema']['fields'],
-            ))
-            resource_['schema']['fields'] += new_fields
+            # Create a list of names and a lookup dict for the new fields
+            new_field_names = [f['target'] for f in fields]
+            new_fields_dict = {
+                f['target']: {
+                    'name': f['target'],
+                    'type': f.get('type', 'string'),
+                } for f in fields
+            }
+
+            # Iterate through the old fields, updating where necessary to maintain order
+            processed_fields = []
+            for f in datapackage_fields:
+                if f['name'] in new_field_names:
+                    processed_fields.append(new_fields_dict[f['name']])
+                    new_field_names.remove(f['name'])
+                else:
+                    processed_fields.append(f)
+            # Add new fields that were not added through the update
+            for fname in new_field_names:
+                processed_fields.append(new_fields_dict[fname])
+
+            # Add back to the datapackage
+            resource_['schema']['fields'] = processed_fields
+
     return datapackage_
 
 def process_resource(rows, missing_data_values):
