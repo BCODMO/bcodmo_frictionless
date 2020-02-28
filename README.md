@@ -65,6 +65,7 @@ _Parameters_:
 
 - All parameters from the [standard processor dump_to_path](https://github.com/frictionlessdata/datapackage-pipelines#dump_to_path)
 - `save_pipeline_spec` - whether or not the pipeline_spec.yaml file should also be saved in dump_to_path. Note that the entire pipeline's pipeline-spec.yaml file will be saved, regardless of where in the pipeline the dump_to_path processor lives.
+- `data_manager` - the name and orcid of the datamanager who developed this pipeline. An object with a name key and an orcid key.
 
 _Other differences from the standard dump_to_path_:
 

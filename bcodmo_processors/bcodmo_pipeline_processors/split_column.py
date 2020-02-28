@@ -29,17 +29,34 @@ def modify_datapackage(datapackage_):
     dp_resources = datapackage_.get('resources', [])
     for resource_ in dp_resources:
         if resources.match(resource_['name']):
+            # Get the old fields
             datapackage_fields = resource_['schema']['fields']
-            new_fields = [{
-                'name': f,
-                'type': 'string',
-            } for f in output_fields]
-            datapackage_fields += new_fields
-            if delete_input:
-                datapackage_fields = [
-                    f for f in datapackage_fields if f['name'] not in input_fields
-                ]
-            resource_['schema']['fields'] = datapackage_fields
+
+            # Create a list of names and a lookup dict for the new fields
+            new_field_names = [f for f in output_fields]
+            new_fields_dict = {
+                f: {
+                    'name': f,
+                    'type': 'string',
+                } for f in output_fields
+            }
+
+            # Iterate through the old fields, updating where necessary to maintain order
+            processed_fields = []
+            for f in datapackage_fields:
+                if delete_input and f['name'] in input_fields and f['name'] not in output_fields:
+                    continue
+                if f['name'] in new_field_names:
+                    processed_fields.append(new_fields_dict[f['name']])
+                    new_field_names.remove(f['name'])
+                else:
+                    processed_fields.append(f)
+            # Add new fields that were not added through the update
+            for fname in new_field_names:
+                processed_fields.append(new_fields_dict[fname])
+
+            # Add back to the datapackage
+            resource_['schema']['fields'] = processed_fields
 
     return datapackage_
 
@@ -86,7 +103,7 @@ def process_resource(rows, missing_data_values):
                     string = groups[index]
                     output_field = output_fields[index]
                     row[output_field] = string
-                if delete_input:
+                if delete_input and input_field not in output_fields:
                     del row[input_field]
 
             yield row

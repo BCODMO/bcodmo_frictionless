@@ -2,7 +2,7 @@ import sys
 from typing import Pattern
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, date as date_type
 from dateutil import parser
 from pyparsing import (
     Regex, Group, operatorPrecedence,
@@ -110,6 +110,13 @@ def parse_boolean(row_counter, res, row, missing_data_values):
                     raise Exception(
                         f'For regular expression boolean comparison the other value has to be of type string: {f_type} and {s_type}'
                     )
+
+                # Convert to date if we are comparing with a date field
+                if f_type is datetime and s_type is date_type:
+                    first_parsed = first_parsed.date()
+                if f_type is date_type and s_type is datetime:
+                    second_parsed = second_parsed.date()
+
 
                 if operation == '>':
                     first_value = first_parsed > second_parsed

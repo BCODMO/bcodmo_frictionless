@@ -24,17 +24,32 @@ def modify_datapackage(datapackage_):
     dp_resources = datapackage_.get('resources', [])
     for resource_ in dp_resources:
         if resources.match(resource_['name']):
+            # Get the old fields
             datapackage_fields = resource_['schema']['fields']
+
+            # Create a list of names and a lookup dict for the new fields
             new_field_names = [f['output_field'] for f in fields]
-            datapackage_fields = [
-                f for f in datapackage_fields if f['name'] not in new_field_names
-            ]
-            new_fields = [{
-                'name': f['output_field'],
-                'type': 'number',
-            } for f in fields]
-            datapackage_fields += new_fields
-            resource_['schema']['fields'] = datapackage_fields
+            new_fields_dict = {
+                f['output_field']: {
+                    'name': f['output_field'],
+                    'type': 'number',
+                } for f in fields
+            }
+
+            # Iterate through the old fields, updating where necessary to maintain order
+            processed_fields = []
+            for f in datapackage_fields:
+                if f['name'] in new_field_names:
+                    processed_fields.append(new_fields_dict[f['name']])
+                    new_field_names.remove(f['name'])
+                else:
+                    processed_fields.append(f)
+            # Add new fields that were not added through the update
+            for fname in new_field_names:
+                processed_fields.append(new_fields_dict[fname])
+
+            # Add back to the datapackage
+            resource_['schema']['fields'] = processed_fields
 
     return datapackage_
 
