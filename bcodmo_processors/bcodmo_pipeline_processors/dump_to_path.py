@@ -20,6 +20,7 @@ class PathDumper(FileDumper):
         super(PathDumper, self).__init__(options)
         self.out_path = out_path
         self.save_pipeline_spec = options.get('save_pipeline_spec', False)
+        self.dataManager = options.get('dataManager', {})
         PathDumper.__makedirs(self.out_path)
 
     def write_file_to_output(self, filename, path):
@@ -48,6 +49,14 @@ class PathDumper(FileDumper):
             pass
 
         return path
+
+    def process_datapackage(self, datapackage):
+        print('PROCessing datapackage')
+        datapackage = super(PathDumper, self).process_datapackage(datapackage)
+        if 'bcodmo:' not in datapackage.descriptor:
+            datapackage.descriptor['bcodmo:'] = {}
+        datapackage.descriptor['bcodmo:']['dataManager'] = self.dataManager
+        return datapackage
 
     def handle_datapackage(self):
         '''
