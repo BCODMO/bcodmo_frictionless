@@ -37,10 +37,11 @@ def modify_datapackage(datapackage_):
             new_fields_dict = {
                 f['output_field']: {
                     'name': f['output_field'],
-                    'type': 'datetime',
+                    'type': f.get('output_type', 'datetime'),
                     'outputFormat': f['output_format'],
                 } for f in fields
             }
+            logging.info(f'new fields dict {new_fields_dict}')
 
             # Iterate through the old fields, updating where necessary to maintain order
             processed_fields = []
@@ -77,6 +78,10 @@ def process_resource(rows, missing_data_values):
                 output_format = field.get('output_format', None)
                 if not output_format:
                     raise Exception('Output format is required')
+                output_type = field.get('output_type', 'datetime')
+                if output_type not in ['datetime', 'date', 'time']:
+                    raise Exception('Output type must be one of datetime, date or time')
+
                 if not line_passed:
                     if output_field in row:
                         row[output_field] = row[output_field]
@@ -84,6 +89,7 @@ def process_resource(rows, missing_data_values):
                         row[output_field] = None
 
                 elif 'input_type' not in field or field['input_type'] == 'python':
+                    logging.info(row)
                     row_value = ''
                     input_format = ''
                     # Support multiple input fields
@@ -98,6 +104,8 @@ def process_resource(rows, missing_data_values):
                                 # per discussion with data managers, set entire row to None
                                 row_value = None
                                 break
+                            if not input_d["format"]:
+                                raise Exception(f"Format for input field {input_field} is empty")
 
                             row_value += f' {row[input_field]}'
                             input_format += f' {input_d["format"]}'
@@ -117,6 +125,7 @@ def process_resource(rows, missing_data_values):
                     if row_value in missing_data_values or row_value is None:
                         row[output_field] = row_value
                         continue
+                    logging.info(f'row value {row_value} type {type(row_value)}')
                     row_value = str(row_value)
 
 
@@ -238,6 +247,10 @@ def process_resource(rows, missing_data_values):
 
                 else:
                     raise Exception(f'Invalid input {field["input_type"]}')
+                if output_type == 'date':
+                    row[output_field] = row[output_field].date()
+                if output_type == 'time':
+                    row[output_field] = row[output_field].time()
 
 
             yield row
