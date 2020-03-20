@@ -92,9 +92,9 @@ def parse_boolean(row_counter, res, row, missing_data_values):
     try:
         for term in res:
 
-            if not first_value:
+            if first_value is None:
                 first_value = term
-            elif not operation:
+            elif operation is None:
                 operation = term
             else:
                 first_parsed = parse_boolean(row_counter, first_value, row, missing_data_values)
