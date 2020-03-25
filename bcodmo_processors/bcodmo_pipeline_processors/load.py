@@ -4,9 +4,13 @@ import glob
 import sys
 from dataflows import Flow, load as standard_load
 from datapackage_pipelines.utilities.resources import PROP_STREAMING, PROP_STREAMED_FROM
+from datapackage_pipelines.wrapper import ingest
+from datapackage_pipelines.utilities.flow_utils import spew_flow
 
 # Import custom parsers here
-from .parsers import FixedWidthParser
+from bcodmo_processors.bcodmo_pipeline_processors.parsers import (
+    FixedWidthParser,
+)
 
 # Add custom parsers here
 # Custom parsers should NOT have periods in their name
@@ -178,6 +182,10 @@ def load(_from, parameters):
     return Flow(*params,)
 
 
-def flow(parameters, datapackage, resources, stats):
+def flow(parameters):
     _from = parameters.pop("from")
     return Flow(load(_from, parameters),)
+
+if __name__ == '__main__':
+    with ingest() as ctx:
+        spew_flow(flow(ctx.parameters), ctx)

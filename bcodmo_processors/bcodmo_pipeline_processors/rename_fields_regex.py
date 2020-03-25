@@ -3,6 +3,8 @@ import sys
 
 from dataflows.helpers.resource_matcher import ResourceMatcher
 from dataflows import Flow
+from datapackage_pipelines.wrapper import ingest
+from datapackage_pipelines.utilities.flow_utils import spew_flow
 
 
 def process_resource(rows, fields, pattern):
@@ -68,3 +70,7 @@ def flow(parameters):
             parameters.get("fields", []), parameters.get('pattern'), resources=parameters.get("resources")
         )
     )
+
+if __name__ == '__main__':
+    with ingest() as ctx:
+        spew_flow(flow(ctx.parameters), ctx)

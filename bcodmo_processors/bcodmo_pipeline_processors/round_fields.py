@@ -3,13 +3,16 @@ import logging
 from decimal import Decimal
 from dataflows import Flow
 from dataflows.helpers.resource_matcher import ResourceMatcher
+from datapackage_pipelines.wrapper import ingest
+from datapackage_pipelines.utilities.flow_utils import spew_flow
 
-from .boolean_processor_helper import (
+from bcodmo_processors.bcodmo_pipeline_processors.boolean_processor_helper import (
     get_expression,
     check_line,
 )
-
-from .helper import get_missing_values
+from bcodmo_processors.bcodmo_pipeline_processors.helper import (
+    get_missing_values,
+)
 
 
 def remove_trailing_zeros(f):
@@ -123,3 +126,8 @@ def flow(parameters):
             boolean_statement=parameters.get("boolean_statement"),
         )
     )
+
+if __name__ == '__main__':
+    with ingest() as ctx:
+        spew_flow(flow(ctx.parameters), ctx)
+
