@@ -9,37 +9,38 @@ from dataflows.helpers.resource_matcher import ResourceMatcher
 
 
 def rename_resource(
-    old_resource,
-    new_resource,
+    old_resource, new_resource,
 ):
-
     def func(package):
         if not old_resource or not new_resource:
-            raise Exception('Both old_resource and new_resource are required parameters in rename_resource')
+            raise Exception(
+                "Both old_resource and new_resource are required parameters in rename_resource"
+            )
         matcher = ResourceMatcher([old_resource], package.pkg)
-        for res in package.pkg.descriptor['resources']:
-            if matcher.match(res['name']):
-                res['name'] = new_resource
-                res['path'] = res['path'].replace(old_resource, new_resource)
+        for res in package.pkg.descriptor["resources"]:
+            if matcher.match(res["name"]):
+                res["name"] = new_resource
+                res["path"] = res["path"].replace(old_resource, new_resource)
 
         yield package.pkg
 
-        for resource in package:
-            yield resource
+        for rows in package:
+            if matcher.match(rows.res.name):
+                rows.res.descriptor["name"] = new_resource
+                rows.res.commit()
+            yield rows
 
     return func
+
 
 def flow(parameters):
     return Flow(
         rename_resource(
-            parameters.get('old_resource'),
-            parameters.get('new_resource'),
+            parameters.get("old_resource"), parameters.get("new_resource"),
         ),
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     with ingest() as ctx:
         spew_flow(flow(ctx.parameters), ctx)
-
-

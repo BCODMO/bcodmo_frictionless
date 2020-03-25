@@ -4,47 +4,56 @@ import collections
 import logging
 import time
 
+from dataflows import Flow
 from dataflows.helpers.resource_matcher import ResourceMatcher
 
-from datapackage_pipelines.wrapper import ingest, spew
+from datapackage_pipelines.wrapper import ingest
+from datapackage_pipelines.utilities.flow_utils import spew_flow
 
-from boolean_processor_helper import (
+from bcodmo_processors.bcodmo_pipeline_processors.boolean_processor_helper import (
     get_expression,
     check_line,
 )
 
-parameters, datapackage, resource_iterator = ingest()
+from bcodmo_processors.bcodmo_pipeline_processors.helper import get_missing_values
 
-resources = ResourceMatcher(parameters.get('resources'), datapackage)
 
-def process_resource(rows, missing_data_values):
-    expression = get_expression(parameters.get('boolean_statement', None))
-
+def _boolean_filter_rows(rows, missing_values, boolean_statement):
+    expression = get_expression(boolean_statement)
     row_counter = 0
     for row in rows:
         row_counter += 1
-        line_passed = check_line(expression, row_counter, row, missing_data_values)
+        line_passed = check_line(expression, row_counter, row, missing_values)
         if line_passed:
             yield row
 
 
-def process_resources(resource_iterator_):
-    for resource in resource_iterator_:
-        spec = resource.spec
-        if not resources.match(spec['name']):
-            yield resource
-        else:
-            missing_data_values = ['']
-            for resource_datapackage in datapackage.get('resources', []):
-                if resource_datapackage['name'] == spec['name']:
-                    missing_data_values = resource_datapackage.get(
-                        'schema', {},
-                    ).get(
-                        'missingValues', ['']
-                    )
-                    break
-            yield process_resource(resource, missing_data_values)
+def boolean_filter_rows(resources=None, boolean_statement=None):
+    def func(package):
+        print("resources", resources, type(resources))
+        matcher = ResourceMatcher(resources, package.pkg)
+        yield package.pkg
+
+        for rows in package:
+            if matcher.match(rows.res.name):
+                missing_values = get_missing_values(rows.res)
+                yield _boolean_filter_rows(rows, missing_values, boolean_statement)
+
+            else:
+                yield rows
+
+    return func
 
 
+def flow(parameters):
+    return Flow(
+        boolean_filter_rows(
+            resources=parameters.get("resources"),
+            boolean_statement=parameters.get("boolean_statement"),
+        )
+    )
 
-spew(datapackage, process_resources(resource_iterator))
+
+if __name__ == "__main__":
+    with ingest() as ctx:
+        spew_flow(flow(ctx.parameters), ctx)

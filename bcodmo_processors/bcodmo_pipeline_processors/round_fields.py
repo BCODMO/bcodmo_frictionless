@@ -1,6 +1,7 @@
 import sys
 import logging
 from decimal import Decimal
+
 from dataflows import Flow
 from dataflows.helpers.resource_matcher import ResourceMatcher
 from datapackage_pipelines.wrapper import ingest
