@@ -8,9 +8,7 @@ from datapackage_pipelines.wrapper import ingest
 from datapackage_pipelines.utilities.flow_utils import spew_flow
 
 # Import custom parsers here
-from bcodmo_processors.bcodmo_pipeline_processors.parsers import (
-    FixedWidthParser,
-)
+from bcodmo_processors.bcodmo_pipeline_processors.parsers import FixedWidthParser
 
 # Add custom parsers here
 # Custom parsers should NOT have periods in their name
@@ -21,7 +19,7 @@ custom_parsers = {
 
 def load(_from, parameters):
     _input_separator = parameters.pop("input_separator", ",")
-    _remove_empty_rows = parameters.pop("remove_empty_rows", False)
+    _remove_empty_rows = parameters.pop("remove_empty_rows", True)
     _recursion_limit = parameters.pop("recursion_limit", False)
 
     if _recursion_limit:
@@ -186,6 +184,7 @@ def flow(parameters):
     _from = parameters.pop("from")
     return Flow(load(_from, parameters),)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     with ingest() as ctx:
         spew_flow(flow(ctx.parameters), ctx)
