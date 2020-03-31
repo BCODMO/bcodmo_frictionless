@@ -12,15 +12,16 @@ def process_resource(rows, fields):
     for row in rows:
         row_counter += 1
         try:
+            new_row = dict((k, v) for k, v in row.items())
             for field in fields:
                 old_field_name = field["old_field"]
                 new_field_name = field["new_field"]
-                if new_field_name in row:
+                if new_field_name in new_row:
                     raise Exception(
-                        f"New field name {new_field_name} already exists in row {row.keys()}"
+                        f"New field name {new_field_name} already exists in row {new_row.keys()}"
                     )
-                row[new_field_name] = row.pop(old_field_name, None)
-            yield row
+                new_row[new_field_name] = new_row.pop(old_field_name, None)
+            yield new_row
         except Exception as e:
             raise type(e)(str(e) + f" at row {row_counter}").with_traceback(
                 sys.exc_info()[2]
@@ -59,6 +60,7 @@ def flow(parameters):
         )
     )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     with ingest() as ctx:
         spew_flow(flow(ctx.parameters), ctx)

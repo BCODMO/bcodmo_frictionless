@@ -1,18 +1,18 @@
-from .load import load
-from .dump_to_path import dump_to_path
-from .find_replace import find_replace
-from .round_fields import round_fields
-from .remove_resources import remove_resources
-from .rename_fields import rename_fields
-from .rename_fields_regex import rename_fields_regex
-from .concatenate import concatenate
-from .reorder_fields import reorder_fields
-from .update_fields import update_fields
-from .add_schema_metadata import add_schema_metadata
-from .convert_date import convert_date
-from .boolean_add_computed_field import boolean_add_computed_field
-from .boolean_filter_rows import boolean_filter_rows
-from .convert_to_decimal_degrees import convert_to_decimal_degrees
-from .split_column import split_column
-from .rename_resource import rename_resource
-from .string_format import string_format
+from .load import flow as load
+from .dump_to_path import flow as dump_to_path
+from .find_replace import flow as find_replace
+from .round_fields import flow as round_fields
+from .remove_resources import flow as remove_resources
+from .rename_fields import flow as rename_fields
+from .rename_fields_regex import flow as rename_fields_regex
+from .concatenate import flow as concatenate
+from .reorder_fields import flow as reorder_fields
+from .update_fields import flow as update_fields
+from .add_schema_metadata import flow as add_schema_metadata
+from .convert_date import flow as convert_date
+from .boolean_add_computed_field import flow as boolean_add_computed_field
+from .boolean_filter_rows import flow as boolean_filter_rows
+from .convert_to_decimal_degrees import flow as convert_to_decimal_degrees
+from .split_column import flow as split_column
+from .rename_resource import flow as rename_resource
+from .string_format import flow as string_format

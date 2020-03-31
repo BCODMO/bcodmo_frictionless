@@ -29,8 +29,9 @@ def process_resource(rows, fields, missing_values, boolean_statement=None):
     row_counter = 0
     for row in rows:
         row_counter += 1
+        new_row = dict((k, v) for k, v in row.items())
 
-        line_passed = check_line(expression, row_counter, row, missing_values)
+        line_passed = check_line(expression, row_counter, new_row, missing_values)
         try:
             for field in fields:
                 # Inititalize all of the parameters that are used by both python and excel input_type
@@ -45,10 +46,10 @@ def process_resource(rows, fields, missing_values, boolean_statement=None):
                     raise Exception("Output type must be one of datetime, date or time")
 
                 if not line_passed:
-                    if output_field in row:
-                        row[output_field] = row[output_field]
+                    if output_field in new_row:
+                        new_row[output_field] = new_row[output_field]
                     else:
-                        row[output_field] = None
+                        new_row[output_field] = None
 
                 elif "input_type" not in field or field["input_type"] == "python":
                     row_value = ""
@@ -58,13 +59,13 @@ def process_resource(rows, fields, missing_values, boolean_statement=None):
                         inputs = field["inputs"]
                         for input_d in inputs:
                             input_field = input_d["field"]
-                            if input_field not in row:
+                            if input_field not in new_row:
                                 raise Exception(
-                                    f"Input field {input_field} not found: {row}"
+                                    f"Input field {input_field} not found: {new_row}"
                                 )
                             if (
-                                row[input_field] in missing_values
-                                or row[input_field] is None
+                                new_row[input_field] in missing_values
+                                or new_row[input_field] is None
                             ):
                                 # There is a value in missing_values
                                 # per discussion with data managers, set entire row to None
@@ -75,17 +76,17 @@ def process_resource(rows, fields, missing_values, boolean_statement=None):
                                     f"Format for input field {input_field} is empty"
                                 )
 
-                            row_value += f" {row[input_field]}"
+                            row_value += f" {new_row[input_field]}"
                             input_format += f' {input_d["format"]}'
 
                     # Backwards compatability with a single input field
                     elif "input_field" in field:
                         input_field = field["input_field"]
-                        if input_field not in row:
+                        if input_field not in new_row:
                             raise Exception(
-                                f"Input field {input_field} not found: {row}"
+                                f"Input field {input_field} not found: {new_row}"
                             )
-                        row_value = row[input_field]
+                        row_value = new_row[input_field]
                         if "input_format" not in field:
                             raise Exception(
                                 "If using depecrated input_field for python input_type you must pass in input_format"
@@ -95,7 +96,7 @@ def process_resource(rows, fields, missing_values, boolean_statement=None):
                         raise Exception("One of input_field or inputs is required")
 
                     if row_value in missing_values or row_value is None:
-                        row[output_field] = row_value
+                        new_row[output_field] = row_value
                         continue
                     row_value = str(row_value)
 
@@ -159,7 +160,7 @@ def process_resource(rows, fields, missing_values, boolean_statement=None):
                     if output_timezone == 'UTC':
                         output_date_obj = output_date_string.replace('UTC', 'Z')
                     """
-                    row[output_field] = output_date_obj
+                    new_row[output_field] = output_date_obj
 
                 elif (
                     field["input_type"] == "excel"
@@ -175,18 +176,18 @@ def process_resource(rows, fields, missing_values, boolean_statement=None):
                     row_value = None
                     if "input_field" in field:
                         input_field = field["input_field"]
-                        if input_field not in row:
+                        if input_field not in new_row:
                             raise Exception(
-                                f"Input field {input_field} not found: {row}"
+                                f"Input field {input_field} not found: {new_row}"
                             )
                     else:
                         raise Exception(
                             "input_field is required when input_type is excel"
                         )
 
-                    row_value = row[input_field]
+                    row_value = new_row[input_field]
                     if row_value in missing_values or row_value is None:
-                        row[output_field] = row_value
+                        new_row[output_field] = row_value
                         continue
 
                     # Convert the row to a number
@@ -230,16 +231,20 @@ def process_resource(rows, fields, missing_values, boolean_statement=None):
                         )
 
                     # Set output field
-                    row[output_field] = output_date_obj
+                    new_row[output_field] = output_date_obj
 
                 else:
                     raise Exception(f'Invalid input {field["input_type"]}')
-                if output_type == "date":
-                    row[output_field] = row[output_field].date()
-                if output_type == "time":
-                    row[output_field] = row[output_field].time()
+                if (
+                    new_row[output_field]
+                    and new_row[output_field] not in missing_values
+                ):
+                    if output_type == "date":
+                        new_row[output_field] = new_row[output_field].date()
+                    if output_type == "time":
+                        new_row[output_field] = new_row[output_field].time()
 
-            yield row
+            yield new_row
         except Exception as e:
             raise type(e)(str(e) + f" at row {row_counter}").with_traceback(
                 sys.exc_info()[2]

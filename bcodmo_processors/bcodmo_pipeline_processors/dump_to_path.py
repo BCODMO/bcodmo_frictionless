@@ -52,7 +52,6 @@ class dump_to_path(FileDumper):
         return path
 
     def process_datapackage(self, datapackage):
-        print("PROCessing datapackage")
         datapackage = super(dump_to_path, self).process_datapackage(datapackage)
         if "bcodmo:" not in datapackage.descriptor:
             datapackage.descriptor["bcodmo:"] = {}
@@ -88,14 +87,16 @@ class dump_to_path(FileDumper):
         os.makedirs(path, exist_ok=True)
 
 
-def flow(parameters: dict, stats: dict):
+def flow(parameters: dict):
     out_path = parameters.pop("out-path", ".")
+    """
     stats.setdefault(STATS_DPP_KEY, {})[STATS_OUT_DP_URL_KEY] = os.path.join(
         out_path, "datapackage.json"
     )
+    """
     return Flow(dump_to_path(out_path, **parameters))
 
 
 if __name__ == "__main__":
     with ingest() as ctx:
-        spew_flow(flow(ctx.parameters, ctx.stats), ctx)
+        spew_flow(flow(ctx.parameters), ctx)

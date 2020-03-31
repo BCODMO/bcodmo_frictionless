@@ -30,7 +30,6 @@ def _boolean_filter_rows(rows, missing_values, boolean_statement):
 
 def boolean_filter_rows(resources=None, boolean_statement=None):
     def func(package):
-        print("resources", resources, type(resources))
         matcher = ResourceMatcher(resources, package.pkg)
         yield package.pkg
 

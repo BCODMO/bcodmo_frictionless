@@ -11,9 +11,7 @@ from bcodmo_processors.bcodmo_pipeline_processors.boolean_processor_helper impor
     check_line,
 )
 
-from bcodmo_processors.bcodmo_pipeline_processors.helper import (
-    get_missing_values,
-)
+from bcodmo_processors.bcodmo_pipeline_processors.helper import get_missing_values
 
 
 def _find_replace(rows, fields, missing_values, boolean_statement=None):
@@ -22,17 +20,18 @@ def _find_replace(rows, fields, missing_values, boolean_statement=None):
     row_counter = 0
     for row in rows:
         row_counter += 1
+        new_row = dict((k, v) for k, v in row.items())
 
-        line_passed = check_line(expression, row_counter, row, missing_values)
+        line_passed = check_line(expression, row_counter, new_row, missing_values)
         if line_passed:
             for field in fields:
                 for pattern in field.get("patterns", []):
-                    row[field["name"]] = re.sub(
+                    new_row[field["name"]] = re.sub(
                         str(pattern["find"]),
                         str(pattern["replace"]),
-                        str(row[field["name"]]),
+                        str(new_row[field["name"]]),
                     )
-        yield row
+        yield new_row
 
 
 def find_replace(fields, resources=None, boolean_statement=None):
@@ -61,7 +60,6 @@ def flow(parameters):
     )
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     with ingest() as ctx:
         spew_flow(flow(ctx.parameters), ctx)

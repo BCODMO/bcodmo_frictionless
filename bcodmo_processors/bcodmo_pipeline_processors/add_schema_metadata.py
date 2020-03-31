@@ -3,6 +3,7 @@ from dataflows.helpers.resource_matcher import ResourceMatcher
 from datapackage_pipelines.wrapper import ingest
 from datapackage_pipelines.utilities.flow_utils import spew_flow
 
+
 def add_schema_metadata(metadata, resources=None):
     def func(package: PackageWrapper):
         matcher = ResourceMatcher(resources, package.pkg)

@@ -47,6 +47,7 @@ def process_resource(rows, fields, missing_values):
     for row in rows:
         row_counter += 1
         try:
+            new_row = dict((k, v) for k, v in row.items())
             for field_index in range(len(fields)):
                 field = fields[field_index]
 
@@ -56,7 +57,7 @@ def process_resource(rows, fields, missing_values):
                     expression = field_functions[field_index][func_index]
 
                     expression_true = parse_boolean(
-                        row_counter, expression, row, missing_values
+                        row_counter, expression, new_row, missing_values
                     )
                     if expression_true:
                         value_ = function.get("value", "")
@@ -64,18 +65,18 @@ def process_resource(rows, fields, missing_values):
                             # Handle a mathematical equation in value
                             value_expression = value_functions[field_index][func_index]
                             new_col = parse_math(
-                                row_counter, value_expression, row, missing_values
+                                row_counter, value_expression, new_row, missing_values
                             )
                         else:
                             new_val = value_.format(**row)
                             if new_val in NULL_VALUES:
                                 new_val = None
                             new_col = new_val
-                        row[field["target"]] = new_col
-                    elif field["target"] not in row:
-                        row[field["target"]] = None
+                        new_row[field["target"]] = new_col
+                    elif field["target"] not in new_row:
+                        new_row[field["target"]] = None
 
-            yield row
+            yield new_row
         except Exception as e:
             raise type(e)(str(e) + f" at row {row_counter}").with_traceback(
                 sys.exc_info()[2]
