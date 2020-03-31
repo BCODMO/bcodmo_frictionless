@@ -130,7 +130,7 @@ def split_column(fields, delete_input=False, resources=None, boolean_statement=N
 
 def flow(parameters):
     return Flow(
-        round_fields(
+        split_column(
             parameters.get("fields", []),
             delete_input=parameters.get("delete_input", False),
             resources=parameters.get("resources"),

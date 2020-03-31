@@ -11,9 +11,7 @@ from bcodmo_processors.bcodmo_pipeline_processors.boolean_processor_helper impor
     get_expression,
     check_line,
 )
-from bcodmo_processors.bcodmo_pipeline_processors.helper import (
-    get_missing_values,
-)
+from bcodmo_processors.bcodmo_pipeline_processors.helper import get_missing_values
 
 
 def remove_trailing_zeros(f):
@@ -128,7 +126,7 @@ def flow(parameters):
         )
     )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     with ingest() as ctx:
         spew_flow(flow(ctx.parameters), ctx)
-
