@@ -1,4 +1,5 @@
 import os
+import tempfile
 import shutil
 import logging
 
@@ -21,6 +22,7 @@ class dump_to_path(FileDumper):
         super(dump_to_path, self).__init__(options)
         self.out_path = out_path
         self.save_pipeline_spec = options.get("save_pipeline_spec", False)
+        self.pipeline_spec = options.get("pipeline_spec", None)
         self.data_manager = options.get("data_manager", {})
         dump_to_path.__makedirs(self.out_path)
 
@@ -71,14 +73,30 @@ class dump_to_path(FileDumper):
 
         """
         if self.save_pipeline_spec:
-            # Use original suffix to get the pipeline-spec without the last dump
-            path = os.path.realpath("./pipeline-spec.yaml.original")
-            if not os.path.exists(path):
-                path = os.path.realpath("./pipeline-spec.yaml")
-            try:
-                self.write_file_to_output(path, "pipeline-spec.yaml")
-            except Exception as e:
-                logger.warn(f"Failed to save the pipeline-spec.yaml: {str(e)}",)
+            if not self.pipeline_spec:
+                # Use original suffix to get the pipeline-spec without the last dump
+                path = os.path.realpath("./pipeline-spec.yaml.original")
+                if not os.path.exists(path):
+                    path = os.path.realpath("./pipeline-spec.yaml")
+                try:
+                    self.write_file_to_output(path, "pipeline-spec.yaml")
+                except Exception as e:
+                    logger.warn(f"Failed to save the pipeline-spec.yaml: {str(e)}",)
+            else:
+                # self from pipeline_spec inputted
+                try:
+                    temp_file = tempfile.NamedTemporaryFile(
+                        mode="w+", delete=False, encoding="utf-8"
+                    )
+                    indent = 2 if self.pretty_descriptor else None
+                    # Write the pipeline_spec to the temp file
+                    temp_file.write(self.pipeline_spec)
+                    temp_file_name = temp_file.name
+                    filesize = temp_file.tell()
+                    temp_file.close()
+                    self.write_file_to_output(temp_file_name, "pipeline-spec.yaml")
+                except Exception as e:
+                    logger.warn(f"Failed to save the pipeline-spec.yaml: {str(e)}",)
 
         super(dump_to_path, self).handle_datapackage()
 
