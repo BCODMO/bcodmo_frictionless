@@ -114,7 +114,7 @@ def load(_from, parameters):
     if name_len is 1:
         if from_len > 1:
             for i in range(from_len):
-                resource_name = f"{_name}{i + 1}"
+                resource_name = f"{_name}-{i + 1}"
                 names.append(resource_name)
         else:
             names = [_name]
