@@ -126,7 +126,7 @@ def load(_from, parameters):
         # Default the name to res[1-n]
         resource_name = names[i]
 
-        if parameters.get("sheet_regex", False):
+        if parameters.pop("sheet_regex", False):
             """
             Handling a regular expression sheet name
             """

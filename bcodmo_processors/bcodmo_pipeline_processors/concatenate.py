@@ -1,3 +1,4 @@
+import logging
 import sys
 import itertools
 import os
@@ -13,8 +14,15 @@ from datapackage_pipelines.utilities.flow_utils import spew_flow
 def concatenator(resources, all_target_fields, field_mapping, include_source_names):
     for resource_ in resources:
         res_name = resource_.res.name
-        path_name = resource_.res._Resource__current_descriptor["dpp:streamedFrom"]
-        file_name = os.path.basename(path_name)
+        if "dpp:streamedFrom" not in resource_.res._Resource__current_descriptor:
+            path_name = None
+            file_name = None
+            logging.warn(
+                "Concatenating a resource with no dpp:streamedFrom so the path name will be empty"
+            )
+        else:
+            path_name = resource_.res._Resource__current_descriptor["dpp:streamedFrom"]
+            file_name = os.path.basename(path_name)
         row_counter = 0
         for row in resource_:
             row_counter += 1
