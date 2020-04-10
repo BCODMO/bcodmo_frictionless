@@ -115,4 +115,61 @@ def test_load_fixed_width():
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_load_seabird():
-    pass
+    flows = [
+        load(
+            {
+                "from": "data/seabird_load.cnv",
+                "name": "res",
+                "format": "bcodmo-fixedwidth",
+                "infer": True,
+                "parse_seabird_header": True,
+                "deduplicate_headers": True,
+                "skip_rows": ["#", "*"],
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert [f.name for f in datapackage.resources[0].schema.fields] == [
+        "prDM",
+        "t090C",
+        "t190C",
+        "c0S/m",
+        "c1S/m",
+        "sbeox0V",
+        "flECO-AFL",
+        "turbWETntu0",
+        "sal00 (1)",
+        "spar",
+        "par",
+        "cpar",
+        "depSM",
+        "sal00 (2)",
+        "sal11",
+        "sbeox0ML/L",
+        "svCM",
+        "sigma-é00",
+        "sigma-é11",
+        "flag",
+    ]
+    assert rows[0][0] == {
+        "prDM": Decimal("3.000"),
+        "t090C": Decimal("8.2738"),
+        "t190C": Decimal("8.2746"),
+        "c0S/m": Decimal("3.493425"),
+        "c1S/m": Decimal("3.493550"),
+        "sbeox0V": Decimal("2.7741"),
+        "flECO-AFL": Decimal("1.1540"),
+        "turbWETntu0": Decimal("0.4288"),
+        "sal00 (1)": Decimal("33.3666"),
+        "spar": Decimal("-9.990E-29"),
+        "par": Decimal("1.0538"),
+        "cpar": Decimal("46.952"),
+        "depSM": Decimal("2.977"),
+        "sal00 (2)": Decimal("33.3666"),
+        "sal11": Decimal("33.3672"),
+        "sbeox0ML/L": Decimal("6.8136"),
+        "svCM": Decimal("1481.54"),
+        "sigma-é00": Decimal("25.9506"),
+        "sigma-é11": Decimal("25.9509"),
+        "flag": Decimal("0.0000"),
+    }
