@@ -16,3 +16,4 @@ from .convert_to_decimal_degrees import flow as convert_to_decimal_degrees
 from .split_column import flow as split_column
 from .rename_resource import flow as rename_resource
 from .string_format import flow as string_format
+from .dump_to_s3 import flow as dump_to_s3
