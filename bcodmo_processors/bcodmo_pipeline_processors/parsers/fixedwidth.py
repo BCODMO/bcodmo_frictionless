@@ -12,7 +12,7 @@ from itertools import chain
 from codecs import iterencode
 from tabulator.parser import Parser
 from tabulator import helpers, config, exceptions
-#import pandas as pd
+import pandas as pd
 import logging
 
 
@@ -129,9 +129,6 @@ class FixedWidthParser(Parser):
         else:
             items.seek(0)
 
-        raise Exception('Not implemented')
-        '''
-
         if self.__infer:
             reader = pd.read_fwf(
                 items,
@@ -158,4 +155,3 @@ class FixedWidthParser(Parser):
                 l = row.tolist()
                 l = [str(item) for item in l]
                 yield (index + 1 + index_offset, None, l)
-        '''

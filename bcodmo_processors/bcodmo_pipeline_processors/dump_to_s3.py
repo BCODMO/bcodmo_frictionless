@@ -27,7 +27,21 @@ class S3Dumper(DumperBase):
         self.pipeline_spec = options.get("pipeline_spec", None)
         self.data_manager = options.get("data_manager", {})
 
-        self.s3 = boto3.resource("s3")
+        access_key = os.environ.get("LAMINAR_S3_DUMP_ACCESS_KEY")
+        secret_access_key = os.environ.get("LAMINAR_S3_DUMP_SECRET_ACCESS_KEY")
+        host = os.environ.get("LAMINAR_S3_DUMP_HOST")
+        region = os.environ.get("LAMINAR_S3_DUMP_REGION")
+        if access_key and host and secret_access_key and region:
+            self.s3 = boto3.resource(
+                "s3",
+                aws_access_key_id=access_key,
+                aws_secret_access_key=secret_access_key,
+                endpoint_url=host,
+                region_name=region,
+            )
+        else:
+            logging.warn("Using base boto credentials for S3 Dumper")
+            self.s3 = boto3.resource("s3")
 
     def process_datapackage(self, datapackage):
         datapackage = super(S3Dumper, self).process_datapackage(datapackage)

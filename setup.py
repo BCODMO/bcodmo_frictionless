@@ -6,6 +6,7 @@ required = [
     "dataflows==0.0.65",
     "tabulator==1.34.0",
     "tableschema==1.15.0",
+    "pandas==0.25.3",
 ]
 
 
