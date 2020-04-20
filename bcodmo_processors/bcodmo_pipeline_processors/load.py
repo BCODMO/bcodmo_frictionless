@@ -94,7 +94,9 @@ def load(_from, parameters):
     if input_path_pattern:
         from_list = glob.glob(_from)
         if not len(from_list):
-            raise Exception(f"No files found with the pattern {_from})")
+            raise Exception(
+                f"No files found on the local file system with the regular expressions pattern {_from}). Are you sure you meant to use the input_path_pattern parameter?"
+            )
     params = []
     _name = parameters.pop("name", None)
     if not _name:
