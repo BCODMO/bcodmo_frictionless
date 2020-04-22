@@ -1,5 +1,5 @@
 import sys
-from datetime import datetime, timedelta
+from datetime import time, date, datetime, timedelta
 from dateutil.tz import tzoffset
 from decimal import Decimal, InvalidOperation
 import logging
@@ -23,7 +23,9 @@ from bcodmo_processors.bcodmo_pipeline_processors.helper import get_missing_valu
 EXCEL_START_DATE = datetime(1899, 12, 30)
 
 
-def process_resource(rows, fields, missing_values, boolean_statement=None):
+def process_resource(
+    rows, fields, missing_values, datapackage_fields, boolean_statement=None
+):
     expression = get_expression(boolean_statement)
 
     row_counter = 0
@@ -63,10 +65,8 @@ def process_resource(rows, fields, missing_values, boolean_statement=None):
                                 raise Exception(
                                     f"Input field {input_field} not found: {new_row}"
                                 )
-                            if (
-                                new_row[input_field] in missing_values
-                                or new_row[input_field] is None
-                            ):
+                            val = new_row[input_field]
+                            if val in missing_values or val is None:
                                 # There is a value in missing_values
                                 # per discussion with data managers, set entire row to None
                                 row_value = None
@@ -75,8 +75,24 @@ def process_resource(rows, fields, missing_values, boolean_statement=None):
                                 raise Exception(
                                     f"Format for input field {input_field} is empty"
                                 )
+                            if type(val) in (datetime, date, time):
+                                input_datapackage_field = None
+                                for f in datapackage_fields:
+                                    if f.name == input_field:
+                                        input_datapackage_field = f
+                                        break
+                                if "outputFormat" in input_datapackage_field.descriptor:
+                                    str_format = input_datapackage_field.descriptor[
+                                        "outputFormat"
+                                    ]
+                                    input_string = val.strftime(str_format)
+                                else:
+                                    intput_string = str(val)
 
-                            row_value += f" {new_row[input_field]}"
+                            else:
+                                input_string = str(val)
+
+                            row_value += f" {input_string}"
                             input_format += f' {input_d["format"]}'
 
                     # Backwards compatability with a single input field
@@ -290,7 +306,11 @@ def convert_date(fields, resources=None, boolean_statement=None):
             if matcher.match(rows.res.name):
                 missing_values = get_missing_values(rows.res)
                 yield process_resource(
-                    rows, fields, missing_values, boolean_statement=boolean_statement,
+                    rows,
+                    fields,
+                    missing_values,
+                    rows.res.schema.fields,
+                    boolean_statement=boolean_statement,
                 )
             else:
                 yield rows
