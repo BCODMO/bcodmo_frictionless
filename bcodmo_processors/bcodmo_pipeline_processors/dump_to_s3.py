@@ -67,7 +67,7 @@ class S3Dumper(DumperBase):
         datapackage.descriptor["bcodmo:"]["dataManager"] = self.data_manager
         return datapackage
 
-    def write_file_to_output(self, contents, path):
+    def write_file_to_output(self, contents, path, content_type):
         if path.startswith("."):
             path = path[1:]
         if path.startswith("/"):
@@ -75,7 +75,7 @@ class S3Dumper(DumperBase):
         obj_name = os.path.join(self.prefix, path)
 
         obj = self.s3.Object(self.bucket_name, obj_name)
-        obj.put(Body=contents)
+        obj.put(Body=contents, ContentType=content_type)
 
         return path
 
@@ -85,7 +85,7 @@ class S3Dumper(DumperBase):
             try:
                 # Write the pipeline_spec to the temp file
                 contents = self.pipeline_spec.encode()
-                self.write_file_to_output(contents, "pipeline-spec.yaml")
+                self.write_file_to_output(contents, "pipeline-spec.yaml", "text/yaml")
             except Exception as e:
                 logging.warn(f"Failed to save the pipeline-spec.yaml: {str(e)}",)
 
@@ -94,7 +94,7 @@ class S3Dumper(DumperBase):
             for resource in self.datapackage.descriptor["resources"]:
                 for field in resource["schema"]["fields"]:
                     if field.get("type") in ["datetime", "date", "time"]:
-                        format = field.pop(self.temporal_format_property, None)
+                        format = field.get(self.temporal_format_property, None)
                         if format:
                             field["format"] = format
             self.datapackage.commit()
@@ -113,7 +113,7 @@ class S3Dumper(DumperBase):
             self.datapackage.descriptor, self.datapackage_bytes, len(contents)
         )
 
-        self.write_file_to_output(contents, "datapackage.json")
+        self.write_file_to_output(contents, "datapackage.json", "application/json")
 
         super(S3Dumper, self).handle_datapackage()
 
@@ -148,7 +148,9 @@ class S3Dumper(DumperBase):
 
         # Finalise
         stream.seek(0)
-        self.write_file_to_output(stream.read().encode(), resource.res.source)
+        self.write_file_to_output(
+            stream.read().encode(), resource.res.source, "text/csv"
+        )
         stream.close()
 
     def process_resource(self, resource):
