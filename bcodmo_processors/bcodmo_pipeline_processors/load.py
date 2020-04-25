@@ -89,7 +89,17 @@ def load(_from, parameters):
         return func
 
     # Handle multiple source URIs
-    from_list = _from.split(_input_separator)
+    if type(_from) == list:
+        from_list = []
+        for f in _from:
+            if type(f) == list:
+                from_list += f
+            else:
+                from_list.append(f)
+        if not len(from_list):
+            raise Exception("There are no values in the source files parameter")
+    else:
+        from_list = _from.split(_input_separator)
     input_path_pattern = parameters.pop("input_path_pattern", False)
     if input_path_pattern:
         from_list = glob.glob(_from)
