@@ -1,7 +1,9 @@
 import xlrd
 import re
+import boto3
 import glob
 import sys
+import fnmatch
 from dataflows import Flow, load as standard_load
 from datapackage_pipelines.utilities.resources import PROP_STREAMING, PROP_STREAMED_FROM
 from datapackage_pipelines.wrapper import ingest
@@ -90,23 +92,41 @@ def load(_from, parameters):
 
     # Handle multiple source URIs
     if type(_from) == list:
-        from_list = []
-        for f in _from:
-            if type(f) == list:
-                from_list += f
-            else:
-                from_list.append(f)
-        if not len(from_list):
-            raise Exception("There are no values in the source files parameter")
+        from_list = _from
     else:
         from_list = _from.split(_input_separator)
+    if not len(from_list):
+        raise Exception("There are no values in the source files parameter")
     input_path_pattern = parameters.pop("input_path_pattern", False)
     if input_path_pattern:
-        from_list = glob.glob(_from)
-        if not len(from_list):
-            raise Exception(
-                f"No files found on the local file system with the regular expressions pattern {_from}). Are you sure you meant to use the input_path_pattern parameter?"
-            )
+        new_from_list = []
+        for p in from_list:
+            temp_from_list = []
+            if p.startswith("s3://"):
+                # Handle s3 pattern
+                try:
+                    bucket, path = p[5:].split("/", 1)
+                except ValueError:
+                    raise Exception(
+                        f"Improperly formed S3 url passed to the load step: {p}"
+                    )
+
+                s3 = boto3.resource("s3")
+                bucket_obj = s3.Bucket(bucket)
+                for obj in bucket_obj.objects.all():
+                    if fnmatch.fnmatch(obj.key, path):
+                        temp_from_list.append(obj.key)
+
+            else:
+                # Handle local filesystem pattern
+                temp_from_list = glob.glob(p)
+                if not len(t):
+                    raise Exception(
+                        f"No files found on the local file system with the glob pattern {p}). Are you sure you meant to use the input_path_pattern parameter?"
+                    )
+            new_from_list += temp_from_list
+        from_list = new_from_list
+
     params = []
     _name = parameters.pop("name", None)
     if not _name:
@@ -118,7 +138,7 @@ def load(_from, parameters):
     from_len = len(from_list)
     if name_len is not 1 and name_len is not from_len:
         raise Exception(
-            f"The comma seperated list of names has length {name_len} and the list of urls has length {from_len}. Please provide only one name or an equal number of names as the from list",
+            f"The list of names has length {name_len} and the list of urls has length {from_len}. Please provide only one name or an equal number of names as the from list",
         )
 
     # Handle the names of the resources, if multiple
