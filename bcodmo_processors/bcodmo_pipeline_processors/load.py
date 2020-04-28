@@ -115,7 +115,7 @@ def load(_from, parameters):
                 bucket_obj = s3.Bucket(bucket)
                 for obj in bucket_obj.objects.all():
                     if fnmatch.fnmatch(obj.key, path):
-                        temp_from_list.append(obj.key)
+                        temp_from_list.append(f"s3://{bucket}/{obj.key}")
 
             else:
                 # Handle local filesystem pattern
@@ -134,6 +134,7 @@ def load(_from, parameters):
             '"name" is now a required parameter. Please add at least a single name.'
         )
 
+    print("from list ", from_list)
     name_len = len(_name.split(_input_separator))
     from_len = len(from_list)
     if name_len is not 1 and name_len is not from_len:
