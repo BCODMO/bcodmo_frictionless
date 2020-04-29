@@ -4,10 +4,16 @@ import boto3
 import glob
 import sys
 import fnmatch
+from urllib.parse import unquote
 from dataflows import Flow, load as standard_load
 from datapackage_pipelines.utilities.resources import PROP_STREAMING, PROP_STREAMED_FROM
 from datapackage_pipelines.wrapper import ingest
 from datapackage_pipelines.utilities.flow_utils import spew_flow
+
+# Imports for handling s3 excel sheet regex
+from six.moves.urllib.parse import urlparse
+from tabulator.helpers import requote_uri
+
 
 # Import custom parsers here
 from bcodmo_processors.bcodmo_pipeline_processors.parsers import FixedWidthParser
@@ -113,9 +119,11 @@ def load(_from, parameters):
 
                 s3 = boto3.resource("s3")
                 bucket_obj = s3.Bucket(bucket)
-                for obj in bucket_obj.objects.all():
-                    if fnmatch.fnmatch(obj.key, path):
-                        temp_from_list.append(f"s3://{bucket}/{obj.key}")
+                matches = fnmatch.filter(
+                    [unquote(obj.key) for obj in bucket_obj.objects.all()], path
+                )
+                for match in matches:
+                    temp_from_list.append(f"s3://{bucket}/{match}")
 
             else:
                 # Handle local filesystem pattern
@@ -134,7 +142,6 @@ def load(_from, parameters):
             '"name" is now a required parameter. Please add at least a single name.'
         )
 
-    print("from list ", from_list)
     name_len = len(_name.split(_input_separator))
     from_len = len(from_list)
     if name_len is not 1 and name_len is not from_len:
@@ -159,41 +166,91 @@ def load(_from, parameters):
         # Default the name to res[1-n]
         resource_name = names[i]
 
-        if parameters.pop("sheet_regex", False):
+        sheet_regex = parameters.pop("sheet_regex", False)
+        sheet = parameters.get("sheet", "")
+        sheet_range = re.match("\d-\d", sheet)
+        sheet_separator = parameters.pop("sheet_separator", None)
+
+        if sheet_regex or sheet_range or (sheet_separator and sheet_separator in sheet):
+            sheet = parameters.pop("sheet", "")
             """
             Handling a regular expression sheet name
             """
-            try:
-                xls = xlrd.open_workbook(url, on_demand=True)
-            except FileNotFoundError:
+            sheets = []
+            if sheet_regex:
+                # Handle sheet regular expression (ignore sheet range and separator)
+                try:
+                    if url.startswith("s3://"):
+                        s3 = boto3.client("s3")
+                        import time
+
+                        start = time.time()
+
+                        parts = urlparse(requote_uri(url), allow_fragments=False)
+                        response = s3.get_object(
+                            Bucket=parts.netloc, Key=parts.path[1:]
+                        )
+                        data = response["Body"].read()
+                        xls = xlrd.open_workbook(file_contents=data, on_demand=True)
+                        # xls = xlrd.open_workbook(io.BytesIO(data), on_demand=True)
+                        elapsed = time.time() - start
+                        print(f"Took {elapsed} to get the regular expression sheet")
+                    else:
+                        xls = xlrd.open_workbook(url, on_demand=True)
+                except FileNotFoundError:
+                    raise Exception(
+                        f"The file {url} was not found. Remember that sheet regular expressions only work on local and s3 paths"
+                    )
+                sheet_names = xls.sheet_names()
+                for sheet_name in sheet_names:
+                    if re.match(sheet, sheet_name):
+                        sheets.append(sheet_name)
+            else:
+                sheets_separate = sheet.split(sheet_separator)
+                for s in sheets_separate:
+                    if re.match("\d-\d", s):
+                        try:
+                            start, end = [
+                                int(sheet_number) for sheet_number in s.split("-", 1)
+                            ]
+                            sheets += range(start, end + 1)
+                        except ValueError:
+                            raise Exception(
+                                f"Attempted to parse a sheet range that contained a non-number: {s}"
+                            )
+                    else:
+                        if s.isdigit():
+                            sheets.append(int(s))
+                        else:
+                            sheets.append(s)
+            if not len(sheets):
                 raise Exception(
-                    f"The file {url} was not found. Remember that sheet regular expressions only work on local paths"
+                    f"No sheets found for {url} with the inputted parameters"
                 )
-            sheet_names = xls.sheet_names()
-            sheet_regex = parameters.pop("sheet", "")
-            for sheet_name in sheet_names:
-                if re.match(sheet_regex, sheet_name):
-                    new_name = re.sub(
-                        "[^-a-z0-9._]", "", re.sub(r"\s+", "_", sheet_name.lower())
-                    )
-                    if len(from_list) > 1:
-                        # If there are multiple urls being loaded, have the name take that into account
-                        new_name = f"{resource_name}-{new_name}"
-                    params.extend(
-                        [
-                            count_resources(),
-                            standard_load(
-                                url,
-                                custom_parsers=custom_parsers,
-                                name=new_name,
-                                sheet=sheet_name,
-                                **parameters,
-                            ),
-                            mark_streaming(url),
-                        ]
-                    )
-                    if _remove_empty_rows:
-                        params.append(remove_empty_rows(new_name))
+
+            # Create load processors for all of these sheets
+            for sheet_name in sheets:
+                new_name = re.sub(
+                    "[^-a-z0-9._]", "", re.sub(r"\s+", "_", str(sheet_name).lower())
+                )
+                if len(from_list) > 1:
+                    # If there are multiple urls being loaded, have the name take that into account
+                    new_name = f"{resource_name}-{new_name}"
+                params.extend(
+                    [
+                        count_resources(),
+                        standard_load(
+                            url,
+                            custom_parsers=custom_parsers,
+                            name=new_name,
+                            sheet=sheet_name,
+                            **parameters,
+                        ),
+                        mark_streaming(url),
+                    ]
+                )
+                if _remove_empty_rows:
+                    params.append(remove_empty_rows(new_name))
         else:
             params.extend(
                 [
