@@ -146,7 +146,7 @@ def load(_from, parameters):
             else:
                 # Handle local filesystem pattern
                 temp_from_list = glob.glob(p)
-                if not len(t):
+                if not len(temp_from_list):
                     raise Exception(
                         f"No files found on the local file system with the glob pattern {p}). Are you sure you meant to use the input_path_pattern parameter?"
                     )
@@ -186,7 +186,9 @@ def load(_from, parameters):
 
         sheet_regex = parameters.pop("sheet_regex", False)
         sheet = parameters.get("sheet", "")
-        sheet_range = re.match("\d-\d", sheet)
+        sheet_range = False
+        if type(sheet) == str:
+            sheet_range = re.match("\d-\d", sheet)
         sheet_separator = parameters.pop("sheet_separator", None)
 
         if sheet_regex or sheet_range or (sheet_separator and sheet_separator in sheet):
