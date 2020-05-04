@@ -1,4 +1,5 @@
 import xlrd
+import os
 import re
 import boto3
 import glob
@@ -23,6 +24,23 @@ from bcodmo_processors.bcodmo_pipeline_processors.parsers import FixedWidthParse
 custom_parsers = {
     "bcodmo-fixedwidth": FixedWidthParser,
 }
+
+
+def get_s3():
+    load_access_key = os.environ.get("AWS_ACCESS_KEY_ID", None)
+    load_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY", None)
+    load_endpoint_url = os.environ.get("LAMINAR_S3_LOAD_HOST", None)
+
+    if load_access_key and load_secret_access_key and load_endpoint_url:
+        return boto3.resource(
+            "s3",
+            aws_access_key_id=load_access_key,
+            aws_secret_access_key=load_secret_access_key,
+            endpoint_url=load_endpoint_url,
+        )
+    raise Exception(
+        "The credentials for the S3 load bucket are not set up properly on this machine"
+    )
 
 
 def load(_from, parameters):
@@ -117,7 +135,7 @@ def load(_from, parameters):
                         f"Improperly formed S3 url passed to the load step: {p}"
                     )
 
-                s3 = boto3.resource("s3")
+                s3 = get_s3()
                 bucket_obj = s3.Bucket(bucket)
                 matches = fnmatch.filter(
                     [unquote(obj.key) for obj in bucket_obj.objects.all()], path
@@ -181,7 +199,7 @@ def load(_from, parameters):
                 # Handle sheet regular expression (ignore sheet range and separator)
                 try:
                     if url.startswith("s3://"):
-                        s3 = boto3.client("s3")
+                        s3 = get_s3()
                         import time
 
                         start = time.time()
