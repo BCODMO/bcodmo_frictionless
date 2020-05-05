@@ -30,14 +30,12 @@ class S3Dumper(DumperBase):
         access_key = os.environ.get("LAMINAR_S3_DUMP_ACCESS_KEY")
         secret_access_key = os.environ.get("LAMINAR_S3_DUMP_SECRET_ACCESS_KEY")
         host = os.environ.get("LAMINAR_S3_DUMP_HOST")
-        region = os.environ.get("LAMINAR_S3_DUMP_REGION")
-        if access_key and host and secret_access_key and region:
+        if access_key and host and secret_access_key:
             self.s3 = boto3.resource(
                 "s3",
                 aws_access_key_id=access_key,
                 aws_secret_access_key=secret_access_key,
                 endpoint_url=host,
-                region_name=region,
             )
         else:
             logging.warn("Using base boto credentials for S3 Dumper")

@@ -143,12 +143,16 @@ def load(_from, parameters):
                 for match in matches:
                     temp_from_list.append(f"s3://{bucket}/{match}")
 
+                if not len(temp_from_list):
+                    raise Exception(
+                        f"No objects found in S3 matching the glob pattern {p}. Are you sure the files have been properly staged?"
+                    )
             else:
                 # Handle local filesystem pattern
                 temp_from_list = glob.glob(p)
                 if not len(temp_from_list):
                     raise Exception(
-                        f"No files found on the local file system with the glob pattern {p}). Are you sure you meant to use the input_path_pattern parameter?"
+                        f"No files found on the local file system with the glob pattern {p}. Are you sure you meant to use the input_path_pattern parameter?"
                     )
             new_from_list += temp_from_list
         from_list = new_from_list
