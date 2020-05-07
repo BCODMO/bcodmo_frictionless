@@ -1,9 +1,14 @@
 import pytest
+import boto3
 import os
 from dataflows import Flow
 from decimal import Decimal
+from moto import mock_s3
+from tabulator.exceptions import IOError as TabulatorIOError
+import logging
 
 from bcodmo_processors.bcodmo_pipeline_processors import *
+
 
 TEST_DEV = os.environ.get("TEST_DEV", False)
 
@@ -74,6 +79,55 @@ def test_load_xlsx_sheet_regex():
     rows, datapackage, _ = Flow(*flows).results()
     assert len(datapackage.resources) == 4
     assert datapackage.resources[0].name == "test2"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_xlsx_sheet_range():
+    flows = [
+        load(
+            {"from": "data/test.xlsx", "name": "res", "format": "xlsx", "sheet": "1-3",}
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert len(datapackage.resources) == 3
+    assert datapackage.resources[0].name == "1"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_xlsx_sheet_multiple():
+    flows = [
+        load(
+            {
+                "from": "data/test.xlsx",
+                "name": "res",
+                "format": "xlsx",
+                "sheet": "test2,test3",
+                "sheet_separator": ",",
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert len(datapackage.resources) == 2
+    assert datapackage.resources[0].name == "test2"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_xlsx_sheet_multiple_range():
+    flows = [
+        load(
+            {
+                "from": "data/test.xlsx",
+                "name": "res",
+                "format": "xlsx",
+                "sheet": "1-3,test4",
+                "sheet_separator": ",",
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert len(datapackage.resources) == 4
+    assert datapackage.resources[0].name == "1"
+    assert datapackage.resources[3].name == "test4"
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
@@ -173,3 +227,79 @@ def test_load_seabird():
         "sigma-é11": Decimal("25.9509"),
         "flag": Decimal("0.0000"),
     }
+
+
+@mock_s3
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_s3():
+    # create bucket and put objects
+    conn = boto3.client("s3")
+    conn.create_bucket(Bucket="testing_bucket")
+    flows = [
+        load({"from": "s3://testing_bucket/test.csv", "name": "res", "format": "csv",})
+    ]
+    try:
+        rows, datapackage, _ = Flow(*flows).results()
+        # ensure that it does indeed through an exception
+        assert False
+    except TabulatorIOError:
+        pass
+
+    # add the file
+    conn.upload_file("data/test.csv", "testing_bucket", "test.csv")
+
+    flows = [
+        load({"from": "s3://testing_bucket/test.csv", "name": "res", "format": "csv",})
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert len(datapackage.resources) == 1
+
+
+@mock_s3
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_s3_path():
+    # create bucket and put objects
+    conn = boto3.client("s3")
+    conn.create_bucket(Bucket="testing_bucket")
+    # add the file
+    conn.upload_file("data/test.csv", "testing_bucket", "test1.csv")
+    conn.upload_file("data/test.csv", "testing_bucket", "test2.csv")
+    conn.upload_file("data/test.csv", "testing_bucket", "test3.csv")
+
+    flows = [
+        load(
+            {
+                "from": "s3://testing_bucket/*.csv",
+                "name": "res",
+                "format": "csv",
+                "input_path_pattern": True,
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert len(datapackage.resources) == 3
+
+
+@mock_s3
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_s3_path_xlsx_regex():
+    # create bucket and put objects
+    conn = boto3.client("s3")
+    conn.create_bucket(Bucket="testing_bucket")
+    # add the file
+    conn.upload_file("data/test.xlsx", "testing_bucket", "test.xlsx")
+
+    flows = [
+        load(
+            {
+                "from": "s3://testing_bucket/test.xlsx",
+                "name": "res",
+                "format": "xlsx",
+                "sheet": "test\d",
+                "sheet_regex": True,
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert len(datapackage.resources) == 4
+    assert datapackage.resources[0].name == "test2"

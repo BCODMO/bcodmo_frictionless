@@ -38,6 +38,8 @@ def get_s3():
             aws_secret_access_key=load_secret_access_key,
             endpoint_url=load_endpoint_url,
         )
+    if os.environ.get("TESTING") == "true":
+        return boto3.resource("s3")
     raise Exception(
         "The credentials for the S3 load bucket are not set up properly on this machine"
     )
