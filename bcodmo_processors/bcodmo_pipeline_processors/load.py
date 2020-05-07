@@ -211,10 +211,8 @@ def load(_from, parameters):
                         start = time.time()
 
                         parts = urlparse(requote_uri(url), allow_fragments=False)
-                        response = s3.get_object(
-                            Bucket=parts.netloc, Key=parts.path[1:]
-                        )
-                        data = response["Body"].read()
+                        obj = s3.Object(parts.netloc, parts.path[1:])
+                        data = obj.get()["Body"].read()
                         xls = xlrd.open_workbook(file_contents=data, on_demand=True)
                         # xls = xlrd.open_workbook(io.BytesIO(data), on_demand=True)
                         elapsed = time.time() - start
