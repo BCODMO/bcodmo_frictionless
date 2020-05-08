@@ -50,3 +50,24 @@ def test_find_replace_boolean():
     assert rows[0][0]["col1"] == "abc"
     assert rows[0][1]["col1"] == "herestest"
     assert rows[0][2]["col1"] == "nothere"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_find_replace_none():
+    flows = [
+        data,
+        find_replace(
+            {
+                "fields": [
+                    {
+                        "name": "col_doesntexist",
+                        "patterns": [{"find": "abc", "replace": "test"}],
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert rows[0][0]["col1"] == "abc"
+    assert rows[0][1]["col1"] == "heresabc"
+    assert rows[0][2]["col1"] == "nothere"
