@@ -26,11 +26,24 @@ def _find_replace(rows, fields, missing_values, boolean_statement=None):
         if line_passed:
             for field in fields:
                 for pattern in field.get("patterns", []):
-                    new_row[field["name"]] = re.sub(
-                        str(pattern["find"]),
-                        str(pattern["replace"]),
-                        str(new_row[field["name"]]),
-                    )
+                    name = field.get("name", None)
+                    find = pattern.get("find", None)
+                    replace = pattern.get("replace", None)
+                    if name == None:
+                        raise Exception(
+                            'The "name" parameter is required for the find_replace processor'
+                        )
+                    if find == None:
+                        raise Exception(
+                            'The "find" parameter is required for the find_replace processor'
+                        )
+                    if replace == None:
+                        raise Exception(
+                            'The "replace" parameter is required for the find_replace processor'
+                        )
+                    val = new_row.get(name, None)
+                    if val != None:
+                        new_row[name] = re.sub(str(find), str(replace), str(val),)
         yield new_row
 
 
