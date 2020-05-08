@@ -122,7 +122,9 @@ def load(_from, parameters):
     else:
         from_list = _from.split(_input_separator)
     if not len(from_list):
-        raise Exception("There are no values in the source files parameter")
+        raise Exception(
+            "There are no URLs selected in the source files parameter of the load step. Select a source file from the provided list"
+        )
     input_path_pattern = parameters.pop("input_path_pattern", False)
     if input_path_pattern:
         new_from_list = []
