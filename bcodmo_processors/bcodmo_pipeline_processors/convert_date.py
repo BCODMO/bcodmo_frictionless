@@ -27,7 +27,6 @@ def process_resource(
     rows, fields, missing_values, datapackage_fields, boolean_statement=None
 ):
     expression = get_expression(boolean_statement)
-
     row_counter = 0
     for row in rows:
         row_counter += 1
