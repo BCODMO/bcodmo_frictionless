@@ -1,13 +1,26 @@
-from datapackage_pipelines.wrapper import ingest, spew
+from dataflows import Flow, PackageWrapper
+from dataflows.helpers.resource_matcher import ResourceMatcher
+from datapackage_pipelines.wrapper import ingest
+from datapackage_pipelines.utilities.flow_utils import spew_flow
 
-parameters, datapackage, res_iter = ingest()
-resources = parameters.pop('resources')
-if datapackage is None:
-    raise Exception('Cannot update schema metadata for an empty datapackage')
-else:
-    for resourceName in resources:
-        for resource in datapackage['resources']:
-            if resource['name'] == resourceName:
-                resource['schema'].update(parameters)
 
-spew(datapackage, res_iter)
+def add_schema_metadata(metadata, resources=None):
+    def func(package: PackageWrapper):
+        matcher = ResourceMatcher(resources, package.pkg)
+        for resource in package.pkg.descriptor["resources"]:
+            if matcher.match(resource["name"]):
+                resource["schema"].update(metadata)
+        yield package.pkg
+        yield from package
+
+    return func
+
+
+def flow(parameters):
+    resources = parameters.get("resources", None)
+    return Flow(add_schema_metadata(parameters, resources=resources))
+
+
+if __name__ == "__main__":
+    with ingest() as ctx:
+        spew_flow(flow(ctx.parameters), ctx)

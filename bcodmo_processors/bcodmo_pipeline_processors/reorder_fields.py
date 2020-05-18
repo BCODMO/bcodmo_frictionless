@@ -2,35 +2,46 @@ from datapackage_pipelines.wrapper import ingest, spew
 from dataflows.helpers.resource_matcher import ResourceMatcher
 import logging
 
-logging.basicConfig(
-    level=logging.WARNING,
-)
-logger = logging.getLogger(__name__)
-
-parameters, datapackage, resource_iterator = ingest()
-
-resources = ResourceMatcher(parameters.get('resources'), datapackage)
-fields = parameters.get('fields', [])
+from dataflows import Flow
 
 
-def modify_datapackage(datapackage_):
-    dp_resources = datapackage_.get('resources', [])
-    for resource_ in dp_resources:
-        if (resources.match(resource_['name'])):
-            datapackage_fields = resource_['schema']['fields']
-            datapackage_field_names = [o['name'] for o in datapackage_fields]
+def reorder_fields(fields, resources=None):
+    def func(package):
+        matcher = ResourceMatcher(resources, package.pkg)
+        for resource in package.pkg.descriptor["resources"]:
+            if matcher.match(resource["name"]):
+                package_fields = resource["schema"]["fields"]
+                package_field_names = [o["name"] for o in package_fields]
 
-            new_fields_list = []
-            for field in fields:
-                try:
-                    field_index = datapackage_field_names.index(field)
-                except ValueError:
-                    raise Exception(f'Field {field} not found in the list of fields: {datapackage_field_names}')
-                new_fields_list.append(datapackage_fields[field_index])
+                new_fields_list = []
+                for field in fields:
+                    try:
+                        field_index = package_field_names.index(field)
+                    except ValueError:
+                        raise Exception(
+                            f"Field {field} not found in the list of fields: {package_field_names}"
+                        )
+                    new_fields_list.append(package_fields[field_index])
 
-            if len(new_fields_list) != len(datapackage_fields):
-                raise Exception(f'Only {len(new_fields_list)} were passed in, {len(datapackage_fields)} required')
-            resource_['schema']['fields'] = new_fields_list
-    return datapackage_
+                if len(new_fields_list) != len(package_fields):
+                    raise Exception(
+                        f"Only {len(new_fields_list)} were passed in to the reorder_fields step, {len(package_fields)} required"
+                    )
+                resource["schema"]["fields"] = new_fields_list
+        yield package.pkg
+        yield from package
 
-spew(modify_datapackage(datapackage), resource_iterator)
+    return func
+
+
+def flow(parameters):
+    return Flow(
+        reorder_fields(
+            parameters.get("fields", []), resources=parameters.get("resources", None),
+        )
+    )
+
+
+if __name__ == "__main__":
+    with ingest() as ctx:
+        spew_flow(flow(ctx.parameters), ctx)

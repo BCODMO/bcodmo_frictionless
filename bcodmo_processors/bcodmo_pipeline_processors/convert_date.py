@@ -1,7 +1,5 @@
 import sys
-from datapackage_pipelines.wrapper import ingest, spew
-from dataflows.helpers.resource_matcher import ResourceMatcher
-from datetime import datetime, timedelta
+from datetime import time, date, datetime, timedelta
 from dateutil.tz import tzoffset
 from decimal import Decimal, InvalidOperation
 import logging
@@ -9,64 +7,32 @@ import pytz
 import re
 import math
 
-from boolean_processor_helper import (
+from dataflows import Flow
+from dataflows.helpers.resource_matcher import ResourceMatcher
+from datapackage_pipelines.wrapper import ingest
+from datapackage_pipelines.utilities.flow_utils import spew_flow
+
+
+from bcodmo_processors.bcodmo_pipeline_processors.boolean_processor_helper import (
     get_expression,
     check_line,
 )
+from bcodmo_processors.bcodmo_pipeline_processors.helper import get_missing_values
 
-logging.basicConfig(level=logging.WARNING,)
-logger = logging.getLogger(__name__)
-
-parameters, datapackage, resource_iterator = ingest()
-
-resources = ResourceMatcher(parameters.get("resources"), datapackage)
-fields = parameters.get("fields", [])
 
 EXCEL_START_DATE = datetime(1899, 12, 30)
 
 
-def modify_datapackage(datapackage_):
-    dp_resources = datapackage_.get("resources", [])
-    for resource_ in dp_resources:
-        if resources.match(resource_["name"]):
-            datapackage_fields = resource_["schema"]["fields"]
-
-            # Create a list of names and a lookup dict for the new fields
-            new_field_names = [f["output_field"] for f in fields]
-            new_fields_dict = {
-                f["output_field"]: {
-                    "name": f["output_field"],
-                    "type": f.get("output_type", "datetime"),
-                    "outputFormat": f["output_format"],
-                }
-                for f in fields
-            }
-
-            # Iterate through the old fields, updating where necessary to maintain order
-            processed_fields = []
-            for f in datapackage_fields:
-                if f["name"] in new_field_names:
-                    processed_fields.append(new_fields_dict[f["name"]])
-                    new_field_names.remove(f["name"])
-                else:
-                    processed_fields.append(f)
-            # Add new fields that were not added through the update
-            for fname in new_field_names:
-                processed_fields.append(new_fields_dict[fname])
-
-            # Add back to the datapackage
-            resource_["schema"]["fields"] = processed_fields
-
-    return datapackage_
-
-
-def process_resource(rows, missing_data_values):
-    expression = get_expression(parameters.get("boolean_statement", None))
-
+def process_resource(
+    rows, fields, missing_values, datapackage_fields, boolean_statement=None
+):
+    expression = get_expression(boolean_statement)
     row_counter = 0
     for row in rows:
         row_counter += 1
-        line_passed = check_line(expression, row_counter, row, missing_data_values)
+        new_row = dict((k, v) for k, v in row.items())
+
+        line_passed = check_line(expression, row_counter, new_row, missing_values)
         try:
             for field in fields:
                 # Inititalize all of the parameters that are used by both python and excel input_type
@@ -81,10 +47,10 @@ def process_resource(rows, missing_data_values):
                     raise Exception("Output type must be one of datetime, date or time")
 
                 if not line_passed:
-                    if output_field in row:
-                        row[output_field] = row[output_field]
+                    if output_field in new_row:
+                        new_row[output_field] = new_row[output_field]
                     else:
-                        row[output_field] = None
+                        new_row[output_field] = None
 
                 elif "input_type" not in field or field["input_type"] == "python":
                     row_value = ""
@@ -94,15 +60,13 @@ def process_resource(rows, missing_data_values):
                         inputs = field["inputs"]
                         for input_d in inputs:
                             input_field = input_d["field"]
-                            if input_field not in row:
+                            if input_field not in new_row:
                                 raise Exception(
-                                    f"Input field {input_field} not found: {row}"
+                                    f"Input field {input_field} not found: {new_row}"
                                 )
-                            if (
-                                row[input_field] in missing_data_values
-                                or row[input_field] is None
-                            ):
-                                # There is a value in missing_data_values
+                            val = new_row[input_field]
+                            if val in missing_values or val is None:
+                                # There is a value in missing_values
                                 # per discussion with data managers, set entire row to None
                                 row_value = None
                                 break
@@ -110,18 +74,34 @@ def process_resource(rows, missing_data_values):
                                 raise Exception(
                                     f"Format for input field {input_field} is empty"
                                 )
+                            if type(val) in (datetime, date, time):
+                                input_datapackage_field = None
+                                for f in datapackage_fields:
+                                    if f.name == input_field:
+                                        input_datapackage_field = f
+                                        break
+                                if "outputFormat" in input_datapackage_field.descriptor:
+                                    str_format = input_datapackage_field.descriptor[
+                                        "outputFormat"
+                                    ]
+                                    input_string = val.strftime(str_format)
+                                else:
+                                    intput_string = str(val)
 
-                            row_value += f" {row[input_field]}"
+                            else:
+                                input_string = str(val)
+
+                            row_value += f" {input_string}"
                             input_format += f' {input_d["format"]}'
 
                     # Backwards compatability with a single input field
                     elif "input_field" in field:
                         input_field = field["input_field"]
-                        if input_field not in row:
+                        if input_field not in new_row:
                             raise Exception(
-                                f"Input field {input_field} not found: {row}"
+                                f"Input field {input_field} not found: {new_row}"
                             )
-                        row_value = row[input_field]
+                        row_value = new_row[input_field]
                         if "input_format" not in field:
                             raise Exception(
                                 "If using depecrated input_field for python input_type you must pass in input_format"
@@ -130,8 +110,8 @@ def process_resource(rows, missing_data_values):
                     else:
                         raise Exception("One of input_field or inputs is required")
 
-                    if row_value in missing_data_values or row_value is None:
-                        row[output_field] = row_value
+                    if row_value in missing_values or row_value is None:
+                        new_row[output_field] = row_value
                         continue
                     row_value = str(row_value)
 
@@ -195,7 +175,7 @@ def process_resource(rows, missing_data_values):
                     if output_timezone == 'UTC':
                         output_date_obj = output_date_string.replace('UTC', 'Z')
                     """
-                    row[output_field] = output_date_obj
+                    new_row[output_field] = output_date_obj
 
                 elif (
                     field["input_type"] == "excel"
@@ -211,18 +191,18 @@ def process_resource(rows, missing_data_values):
                     row_value = None
                     if "input_field" in field:
                         input_field = field["input_field"]
-                        if input_field not in row:
+                        if input_field not in new_row:
                             raise Exception(
-                                f"Input field {input_field} not found: {row}"
+                                f"Input field {input_field} not found: {new_row}"
                             )
                     else:
                         raise Exception(
                             "input_field is required when input_type is excel"
                         )
 
-                    row_value = row[input_field]
-                    if row_value in missing_data_values or row_value is None:
-                        row[output_field] = row_value
+                    row_value = new_row[input_field]
+                    if row_value in missing_values or row_value is None:
+                        new_row[output_field] = row_value
                         continue
 
                     # Convert the row to a number
@@ -266,36 +246,87 @@ def process_resource(rows, missing_data_values):
                         )
 
                     # Set output field
-                    row[output_field] = output_date_obj
+                    new_row[output_field] = output_date_obj
 
                 else:
                     raise Exception(f'Invalid input {field["input_type"]}')
-                if output_type == "date":
-                    row[output_field] = row[output_field].date()
-                if output_type == "time":
-                    row[output_field] = row[output_field].time()
+                if (
+                    new_row[output_field]
+                    and new_row[output_field] not in missing_values
+                ):
+                    if output_type == "date":
+                        new_row[output_field] = new_row[output_field].date()
+                    if output_type == "time":
+                        new_row[output_field] = new_row[output_field].time()
 
-            yield row
+            yield new_row
         except Exception as e:
             raise type(e)(str(e) + f" at row {row_counter}").with_traceback(
                 sys.exc_info()[2]
             )
 
 
-def process_resources(resource_iterator_):
-    for resource in resource_iterator_:
-        spec = resource.spec
-        if not resources.match(spec["name"]):
-            yield resource
-        else:
-            missing_data_values = [""]
-            for resource_datapackage in datapackage.get("resources", []):
-                if resource_datapackage["name"] == spec["name"]:
-                    missing_data_values = resource_datapackage.get("schema", {},).get(
-                        "missingValues", [""]
-                    )
-                    break
-            yield process_resource(resource, missing_data_values)
+def convert_date(fields, resources=None, boolean_statement=None):
+    def func(package):
+        matcher = ResourceMatcher(resources, package.pkg)
+        for resource in package.pkg.descriptor["resources"]:
+            if matcher.match(resource["name"]):
+                package_fields = resource["schema"]["fields"]
+
+                # Create a list of names and a lookup dict for the new fields
+                new_field_names = [f["output_field"] for f in fields]
+                new_fields_dict = {
+                    f["output_field"]: {
+                        "name": f["output_field"],
+                        "type": f.get("output_type", "datetime"),
+                        "outputFormat": f["output_format"],
+                    }
+                    for f in fields
+                }
+
+                # Iterate through the old fields, updating where necessary to maintain order
+                processed_fields = []
+                for f in package_fields:
+                    if f["name"] in new_field_names:
+                        processed_fields.append(new_fields_dict[f["name"]])
+                        new_field_names.remove(f["name"])
+                    else:
+                        processed_fields.append(f)
+                # Add new fields that were not added through the update
+                for fname in new_field_names:
+                    processed_fields.append(new_fields_dict[fname])
+
+                # Add back to the datapackage
+                resource["schema"]["fields"] = processed_fields
+
+        yield package.pkg
+
+        for rows in package:
+            if matcher.match(rows.res.name):
+                missing_values = get_missing_values(rows.res)
+                yield process_resource(
+                    rows,
+                    fields,
+                    missing_values,
+                    rows.res.schema.fields,
+                    boolean_statement=boolean_statement,
+                )
+            else:
+                yield rows
+
+    return func
 
 
-spew(modify_datapackage(datapackage), process_resources(resource_iterator))
+def flow(parameters):
+    return Flow(
+        convert_date(
+            parameters.get("fields", []),
+            resources=parameters.get("resources"),
+            boolean_statement=parameters.get("boolean_statement"),
+        )
+    )
+
+
+if __name__ == "__main__":
+    with ingest() as ctx:
+        spew_flow(flow(ctx.parameters), ctx)

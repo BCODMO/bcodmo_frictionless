@@ -18,6 +18,7 @@ import logging
 
 # Module API
 
+
 class FixedWidthParser(Parser):
     """Parser to parse FixedWidth data format.
     """
@@ -25,11 +26,11 @@ class FixedWidthParser(Parser):
     # Public
 
     options = [
-        'width',
-        'infer',
-        'parse_seabird_header',
-        'fixedwidth_skip_header',
-        'fixedwidth_sample_size',
+        "width",
+        "infer",
+        "parse_seabird_header",
+        "fixedwidth_skip_header",
+        "fixedwidth_sample_size",
     ]
 
     def __init__(
@@ -49,8 +50,8 @@ class FixedWidthParser(Parser):
         # A list of strings that will be used to determine what is a comment at the top of the file
         self.__fixedwidth_skip_header = fixedwidth_skip_header
         # Ensure that # is included in seabird files, because that's how we will parse the header
-        if parse_seabird_header and '#' not in self.__fixedwidth_skip_header:
-            self.__fixedwidth_skip_header.append('#')
+        if parse_seabird_header and "#" not in self.__fixedwidth_skip_header:
+            self.__fixedwidth_skip_header.append("#")
         # Sample size for the pandas fixed width parser
         self.__fixedwidth_sample_size = fixedwidth_sample_size
         self.__force_parse = force_parse
@@ -65,7 +66,7 @@ class FixedWidthParser(Parser):
     def open(self, source, encoding=None):
         self.close()
         self.__chars = self.__loader.load(source, encoding=encoding)
-        self.__encoding = getattr(self.__chars, 'encoding', encoding)
+        self.__encoding = getattr(self.__chars, "encoding", encoding)
         if self.__encoding:
             self.__encoding.lower()
         self.reset()
@@ -92,16 +93,16 @@ class FixedWidthParser(Parser):
         width = self.__width
         if width is None and not self.__infer:
             raise exceptions.TabulatorException(
-                'width is a required parameter for fixedwidth format if infer is not set'
+                "width is a required parameter for fixedwidth format if infer is not set"
             )
         items = self.__chars
         last_item = None
         file_pos = None
         header_values = []
-        for item in iter(items.readline, ''):
+        for item in iter(items.readline, ""):
             last_item = item
             if self.__parse_seabird_header:
-                match = re.match('^# name \d* = (.*):.*$', item)
+                match = re.match("^# name \d* = (.*):.*$", item)
                 if match:
                     header_values.append(match.groups()[0])
             is_comment = False
@@ -117,7 +118,7 @@ class FixedWidthParser(Parser):
         if self.__parse_seabird_header:
             if not self.__infer and len(width) != len(header_values):
                 raise exceptions.TabulatorException(
-                    f'The inferred header is of length {len(header_values)} but there are {len(width)} width values'
+                    f"The inferred header is of length {len(header_values)} but there are {len(width)} width values"
                 )
             # Yield the header value as the first row
             yield (1, None, header_values)
@@ -131,10 +132,11 @@ class FixedWidthParser(Parser):
         if self.__infer:
             reader = pd.read_fwf(
                 items,
-                colspecs='infer',
+                colspecs="infer",
                 infer_nrows=self.__fixedwidth_sample_size,
                 chunksize=2,
                 dtype=str,
+                header=None,
             )
         else:
             reader = pd.read_fwf(
@@ -143,14 +145,13 @@ class FixedWidthParser(Parser):
                 infer_nrows=self.__fixedwidth_sample_size,
                 chunksize=2,
                 dtype=str,
+                header=None,
             )
         index_offset = 0
         if self.__parse_seabird_header:
             index_offset = 1
         for chunk in reader:
             for index, row in chunk.iterrows():
-                if index == 0:
-                    yield (1 + index_offset, None, list(chunk))
                 l = row.tolist()
                 l = [str(item) for item in l]
-                yield (index + 2 + index_offset, None, l)
+                yield (index + 1 + index_offset, None, l)
