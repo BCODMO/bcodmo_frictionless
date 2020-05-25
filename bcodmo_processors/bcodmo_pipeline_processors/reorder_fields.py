@@ -3,6 +3,8 @@ from dataflows.helpers.resource_matcher import ResourceMatcher
 import logging
 
 from dataflows import Flow
+from datapackage_pipelines.wrapper import ingest
+from datapackage_pipelines.utilities.flow_utils import spew_flow
 
 
 def reorder_fields(fields, resources=None):

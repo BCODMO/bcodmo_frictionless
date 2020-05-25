@@ -16,9 +16,7 @@ from bcodmo_processors.bcodmo_pipeline_processors.boolean_processor_helper impor
     get_expression,
     check_line,
 )
-from bcodmo_processors.bcodmo_pipeline_processors.helper import (
-    get_missing_values,
-)
+from bcodmo_processors.bcodmo_pipeline_processors.helper import get_missing_values
 
 
 def process_resource(rows, fields, missing_values, boolean_statement=None):
@@ -32,15 +30,15 @@ def process_resource(rows, fields, missing_values, boolean_statement=None):
         try:
             for field in fields:
                 # Inititalize all of the parameters
-                output_field = field.get('output_field', None)
+                output_field = field.get("output_field", None)
                 if not output_field:
-                    raise Exception('output_field is required')
-                input_string = field.get('input_string', None)
+                    raise Exception("output_field is required")
+                input_string = field.get("input_string", None)
                 if not input_string:
-                    raise Exception('input_string is required')
-                input_fields = field.get('input_fields', None)
+                    raise Exception("input_string is required")
+                input_fields = field.get("input_fields", None)
                 if not input_fields:
-                    raise Exception('input_fields is required')
+                    raise Exception("input_fields is required")
 
                 if not line_passed:
                     if output_field in row:
@@ -51,7 +49,7 @@ def process_resource(rows, fields, missing_values, boolean_statement=None):
                 row_values = []
                 for input_field in input_fields:
                     if input_field not in row:
-                        raise Exception(f'Input field {input_field} not found: {row}')
+                        raise Exception(f"Input field {input_field} not found: {row}")
                     if row[input_field] in missing_values or row[input_field] is None:
                         # There is a value in missing_values
                         # per discussion with data managers, set entire row to None
@@ -70,16 +68,15 @@ def process_resource(rows, fields, missing_values, boolean_statement=None):
                     row[output_field] = input_string.format(*row_values)
                 except ValueError:
                     raise Exception(
-                        f'There was an error while formatting {input_string} to the values {row_values} at row {row_counter}'
-                        + ' Make sure that the types of the fields correctly correspond to the format string'
+                        f"There was an error while formatting {input_string} to the values {row_values} at row {row_counter}"
+                        + " Make sure that the types of the fields correctly correspond to the format string"
                     )
 
             yield row
         except Exception as e:
-            raise type(e)(
-                str(e) +
-                f' at row {row_counter}'
-            ).with_traceback(sys.exc_info()[2])
+            raise type(e)(str(e) + f" at row {row_counter}").with_traceback(
+                sys.exc_info()[2]
+            )
 
 
 def string_format(fields, resources=None, boolean_statement=None):
@@ -88,23 +85,21 @@ def string_format(fields, resources=None, boolean_statement=None):
         for resource in package.pkg.descriptor["resources"]:
             if matcher.match(resource["name"]):
                 # Get the old fields
-                package_fields = resource['schema']['fields']
+                package_fields = resource["schema"]["fields"]
 
                 # Create a list of names and a lookup dict for the new fields
-                new_field_names = [f['output_field'] for f in fields]
+                new_field_names = [f["output_field"] for f in fields]
                 new_fields_dict = {
-                    f['output_field']: {
-                        'name': f['output_field'],
-                        'type': 'string',
-                    } for f in fields
+                    f["output_field"]: {"name": f["output_field"], "type": "string",}
+                    for f in fields
                 }
 
                 # Iterate through the old fields, updating where necessary to maintain order
                 processed_fields = []
                 for f in package_fields:
-                    if f['name'] in new_field_names:
-                        processed_fields.append(new_fields_dict[f['name']])
-                        new_field_names.remove(f['name'])
+                    if f["name"] in new_field_names:
+                        processed_fields.append(new_fields_dict[f["name"]])
+                        new_field_names.remove(f["name"])
                     else:
                         processed_fields.append(f)
                 # Add new fields that were not added through the update
@@ -112,7 +107,7 @@ def string_format(fields, resources=None, boolean_statement=None):
                     processed_fields.append(new_fields_dict[fname])
 
                 # Add back to the datapackage
-                resource['schema']['fields'] = processed_fields
+                resource["schema"]["fields"] = processed_fields
         yield package.pkg
 
         for rows in package:
@@ -129,14 +124,14 @@ def string_format(fields, resources=None, boolean_statement=None):
 
 def flow(parameters):
     return Flow(
-        round_fields(
+        string_format(
             parameters.get("fields", []),
             resources=parameters.get("resources"),
             boolean_statement=parameters.get("boolean_statement"),
         )
     )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     with ingest() as ctx:
         spew_flow(flow(ctx.parameters), ctx)
-
