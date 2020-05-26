@@ -46,6 +46,7 @@ def get_s3():
 
 
 def load(_from, parameters):
+    print("Inside load step")
     _input_separator = parameters.pop("input_separator", ",")
     _remove_empty_rows = parameters.pop("remove_empty_rows", True)
     _recursion_limit = parameters.pop("recursion_limit", False)
@@ -293,6 +294,7 @@ def load(_from, parameters):
             if _remove_empty_rows:
                 params.append(remove_empty_rows(resource_name))
 
+    print("Returning flow with params", len(params))
     return Flow(*params,)
 
 
