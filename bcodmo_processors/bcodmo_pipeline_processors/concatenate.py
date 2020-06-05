@@ -33,7 +33,10 @@ def concatenator(resources, all_target_fields, field_mapping, include_source_nam
                     for (k, v) in row.items()
                     if k in field_mapping
                 ]
-                assert len(values) > 0
+                if len(values) == 0:
+                    raise Exception(
+                        f"The resource {res_name} had no values to be concatenated"
+                    )
                 processed.update(dict(values))
                 for source in include_source_names:
                     if source["type"] == "resource":
@@ -57,6 +60,8 @@ def concatenate(
         # Prepare target resource
         if "name" not in target:
             target["name"] = "concat"
+        if not target["name"]:
+            raise Exception("The concatenate target name cannot be empty")
         if "path" not in target:
             target["path"] = "data/" + target["name"] + ".csv"
         target.update(
@@ -135,7 +140,11 @@ def concatenate(
                 else:
                     new_resources.append(resource)
             elif suffix:
-                assert not match
+                if match:
+                    print("raising excpetion")
+                    raise Exception(
+                        "Concatenated resources must be appear in consecutive order in the datapackage"
+                    )
                 new_resources.append(resource)
             else:
                 if not match:
