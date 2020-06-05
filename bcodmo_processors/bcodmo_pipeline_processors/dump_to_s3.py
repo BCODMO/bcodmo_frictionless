@@ -28,7 +28,7 @@ class S3Dumper(DumperBase):
         self.data_manager = options.get("data_manager", {})
 
         access_key = os.environ.get("AWS_ACCESS_KEY_ID")
-        secret_access_key = os.environ.get("AWS_ACCESS_SECRET_ACCESS_KEY")
+        secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
         host = os.environ.get("LAMINAR_S3_HOST")
         if access_key and host and secret_access_key:
             self.s3 = boto3.resource(
