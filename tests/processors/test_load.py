@@ -2,6 +2,7 @@ import pytest
 import boto3
 import os
 from dataflows import Flow
+from dataflows.base import exceptions as dataflow_exceptions
 from decimal import Decimal
 from moto import mock_s3
 from tabulator.exceptions import IOError as TabulatorIOError
@@ -244,6 +245,10 @@ def test_load_s3():
         assert False
     except TabulatorIOError:
         pass
+    except dataflow_exceptions.SourceLoadError:
+        pass
+    except dataflow_exceptions.ProcessorError as e:
+        assert type(e.cause) in [TabulatorIOError, dataflow_exceptions.SourceLoadError]
 
     # add the file
     conn.upload_file("data/test.csv", "testing_bucket", "test.csv")

@@ -27,6 +27,8 @@ custom_parsers = {
 
 
 def get_s3():
+    if os.environ.get("TESTING") == "true":
+        return boto3.resource("s3")
     load_access_key = os.environ.get("AWS_ACCESS_KEY_ID", None)
     load_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY", None)
     load_endpoint_url = os.environ.get("LAMINAR_S3_HOST", None)
@@ -38,8 +40,6 @@ def get_s3():
             aws_secret_access_key=load_secret_access_key,
             endpoint_url=load_endpoint_url,
         )
-    if os.environ.get("TESTING") == "true":
-        return boto3.resource("s3")
     raise Exception(
         "The credentials for the S3 load bucket are not set up properly on this machine"
     )
