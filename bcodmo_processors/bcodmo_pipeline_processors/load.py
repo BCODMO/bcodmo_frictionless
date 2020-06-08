@@ -29,7 +29,7 @@ custom_parsers = {
 def get_s3():
     load_access_key = os.environ.get("AWS_ACCESS_KEY_ID", None)
     load_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY", None)
-    load_endpoint_url = os.environ.get("LAMINAR_S3_LOAD_HOST", None)
+    load_endpoint_url = os.environ.get("LAMINAR_S3_HOST", None)
 
     if load_access_key and load_secret_access_key and load_endpoint_url:
         return boto3.resource(
