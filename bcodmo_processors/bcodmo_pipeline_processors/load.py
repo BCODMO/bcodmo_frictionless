@@ -170,13 +170,13 @@ def load(_from, parameters):
     _use_filename = parameters.pop("use_filename", None)
     if not _name and not _use_filename:
         raise Exception(
-            '"name" is now a required parameter. Please add at least a single name.'
+            '"name" is now a required parameter. Please add at least a single name or use the use_filename parameter.'
         )
 
     if _use_filename:
         names = []
         for path in from_list:
-            filename = os.path.basename(path)
+            filename = os.path.splitext(os.path.basename(path))[0]
             resource_name_base = clean_resource_name(filename)
             resource_name = resource_name_base
             i = 1
@@ -217,7 +217,11 @@ def load(_from, parameters):
             sheet_range = re.match("\d-\d", sheet)
         sheet_separator = parameters.pop("sheet_separator", None)
 
-        if sheet_regex or sheet_range or (sheet_separator and sheet_separator in sheet):
+        if (
+            sheet_regex
+            or sheet_range
+            or (sheet_separator and type(sheet) == str and sheet_separator in sheet)
+        ):
             sheet = parameters.pop("sheet", "")
             """
             Handling a regular expression sheet name
@@ -274,6 +278,7 @@ def load(_from, parameters):
 
             # Create load processors for all of these sheets
             for sheet_name in sheets:
+                print("looping through sheets", sheet_name)
                 new_name = clean_resource_name(str(sheet_name))
                 if len(from_list) > 1 or _use_filename:
                     # If there are multiple urls being loaded, have the name take that into account
@@ -294,6 +299,9 @@ def load(_from, parameters):
                 if _remove_empty_rows:
                     params.append(remove_empty_rows(new_name))
         else:
+            if type(sheet) == int and _use_filename:
+                resource_name = f"{resource_name}-{sheet}"
+
             params.extend(
                 [
                     count_resources(),
