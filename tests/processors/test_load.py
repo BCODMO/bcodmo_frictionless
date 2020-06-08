@@ -308,3 +308,49 @@ def test_load_s3_path_xlsx_regex():
     rows, datapackage, _ = Flow(*flows).results()
     assert len(datapackage.resources) == 4
     assert datapackage.resources[0].name == "test2"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_list():
+    flows = [
+        load(
+            {
+                "from": ["data/test.csv", "data/test.csv"],
+                "name": "res",
+                "format": "csv",
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert datapackage
+    assert len(datapackage.resources) == 2
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_use_filename():
+    flows = [load({"from": ["data/test.csv"], "use_filename": True, "format": "csv"})]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert datapackage
+    assert len(datapackage.resources) == 1
+    assert datapackage.resources[0].name == "test.csv"
+    assert len(datapackage.resources[0].schema.fields) == 4
+
+    assert len(rows) == 1
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_use_filename_multiple():
+    flows = [
+        load(
+            {
+                "from": ["data/test.csv", "data/test.csv"],
+                "use_filename": True,
+                "format": "csv",
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert datapackage
+    assert len(datapackage.resources) == 2
+    assert datapackage.resources[0].name == "test.csv"
+    assert datapackage.resources[1].name == "test.csv_2"
