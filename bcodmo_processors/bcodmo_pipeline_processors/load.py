@@ -27,6 +27,8 @@ custom_parsers = {
 
 
 def get_s3():
+    if os.environ.get("TESTING") == "true":
+        return boto3.resource("s3")
     load_access_key = os.environ.get("AWS_ACCESS_KEY_ID", None)
     load_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY", None)
     load_endpoint_url = os.environ.get("LAMINAR_S3_HOST", None)
@@ -38,11 +40,13 @@ def get_s3():
             aws_secret_access_key=load_secret_access_key,
             endpoint_url=load_endpoint_url,
         )
-    if os.environ.get("TESTING") == "true":
-        return boto3.resource("s3")
     raise Exception(
         "The credentials for the S3 load bucket are not set up properly on this machine"
     )
+
+
+def clean_resource_name(name):
+    return re.sub("[^-a-z0-9._]", "", re.sub(r"\s+", "_", name.lower()))
 
 
 def load(_from, parameters):
@@ -163,29 +167,43 @@ def load(_from, parameters):
 
     params = []
     _name = parameters.pop("name", None)
-    if not _name:
+    _use_filename = parameters.pop("use_filename", None)
+    if not _name and not _use_filename:
         raise Exception(
-            '"name" is now a required parameter. Please add at least a single name.'
+            '"name" is now a required parameter. Please add at least a single name or use the use_filename parameter.'
         )
 
-    name_len = len(_name.split(_input_separator))
-    from_len = len(from_list)
-    if name_len is not 1 and name_len is not from_len:
-        raise Exception(
-            f"The list of names has length {name_len} and the list of urls has length {from_len}. Please provide only one name or an equal number of names as the from list",
-        )
+    if _use_filename:
+        names = []
+        for path in from_list:
+            filename = os.path.splitext(os.path.basename(path))[0]
+            resource_name_base = clean_resource_name(filename)
+            resource_name = resource_name_base
+            i = 1
+            while resource_name in names:
+                i += 1
+                resource_name = f"{resource_name_base}_{i}"
+            names.append(resource_name)
 
-    # Handle the names of the resources, if multiple
-    names = []
-    if name_len is 1:
-        if from_len > 1:
-            for i in range(from_len):
-                resource_name = f"{_name}-{i + 1}"
-                names.append(resource_name)
-        else:
-            names = [_name]
     else:
-        names = _name.split(_input_separator)
+        name_len = len(_name.split(_input_separator))
+        from_len = len(from_list)
+        if name_len is not 1 and name_len is not from_len:
+            raise Exception(
+                f"The list of names has length {name_len} and the list of urls has length {from_len}. Please provide only one name or an equal number of names as the from list",
+            )
+
+        # Handle the names of the resources, if multiple
+        names = []
+        if name_len is 1:
+            if from_len > 1:
+                for i in range(from_len):
+                    resource_name = f"{_name}-{i + 1}"
+                    names.append(resource_name)
+            else:
+                names = [_name]
+        else:
+            names = _name.split(_input_separator)
 
     # Get comma seperated file names/urls
     for i, url in enumerate(from_list):
@@ -199,7 +217,11 @@ def load(_from, parameters):
             sheet_range = re.match("\d-\d", sheet)
         sheet_separator = parameters.pop("sheet_separator", None)
 
-        if sheet_regex or sheet_range or (sheet_separator and sheet_separator in sheet):
+        if (
+            sheet_regex
+            or sheet_range
+            or (sheet_separator and type(sheet) == str and sheet_separator in sheet)
+        ):
             sheet = parameters.pop("sheet", "")
             """
             Handling a regular expression sheet name
@@ -256,10 +278,9 @@ def load(_from, parameters):
 
             # Create load processors for all of these sheets
             for sheet_name in sheets:
-                new_name = re.sub(
-                    "[^-a-z0-9._]", "", re.sub(r"\s+", "_", str(sheet_name).lower())
-                )
-                if len(from_list) > 1:
+                print("looping through sheets", sheet_name)
+                new_name = clean_resource_name(str(sheet_name))
+                if len(from_list) > 1 or _use_filename:
                     # If there are multiple urls being loaded, have the name take that into account
                     new_name = f"{resource_name}-{new_name}"
                 params.extend(
@@ -278,6 +299,9 @@ def load(_from, parameters):
                 if _remove_empty_rows:
                     params.append(remove_empty_rows(new_name))
         else:
+            if type(sheet) == int and _use_filename:
+                resource_name = f"{resource_name}-{sheet}"
+
             params.extend(
                 [
                     count_resources(),
