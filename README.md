@@ -307,3 +307,15 @@ _Parameters_:
 - `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
 
 _Notes_:
+
+### **_`bcodmo_pipeline_processors.extract_nonnumeric`_**
+
+Extract nonnumeric values from fields into a new a field
+
+_Parameters_:
+
+- `fields` - A list of strings
+- `suffix` - The suffix to be added to create a field where the string is stored
+- `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
+
+_Notes_:
