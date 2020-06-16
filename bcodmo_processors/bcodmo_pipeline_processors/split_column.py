@@ -37,6 +37,9 @@ def process_resource(
                         row[output_field] = None
                     continue
 
+                if delete_input and input_field not in output_fields:
+                    del row[input_field]
+
                 if row_value in missing_values or row_value is None:
                     for output_field in output_fields:
                         row[output_field] = row_value
@@ -59,8 +62,6 @@ def process_resource(
                     string = groups[index]
                     output_field = output_fields[index]
                     row[output_field] = string
-                if delete_input and input_field not in output_fields:
-                    del row[input_field]
 
             yield row
         except Exception as e:
