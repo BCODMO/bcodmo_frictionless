@@ -43,9 +43,6 @@ def process_resource(rows, fields, missing_values, boolean_statement=None):
                     continue
                 row_value = str(row_value)
 
-                # If directional is user inputted, get it
-                directional = "directional" in field and field["directional"]
-
                 pattern = field["pattern"]
                 input_format = field["format"]
                 match = re.search(pattern, row_value)
@@ -68,7 +65,7 @@ def process_resource(rows, fields, missing_values, boolean_statement=None):
                     )
 
                 # Get the directional value
-                if "directional" in field:
+                if "directional" in field and field["directional"]:
                     directional = field["directional"]
                 else:
                     try:
