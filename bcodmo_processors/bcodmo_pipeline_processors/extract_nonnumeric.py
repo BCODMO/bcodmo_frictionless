@@ -38,7 +38,8 @@ def process_resource(rows, fields, missing_values, suffix=None, boolean_statemen
                 # Check if  the field is numeric
                 original_value = row.get(field, None)
                 try:
-                    float(original_value)
+                    if original_value is not None:
+                        float(original_value)
                     is_numeric = True
                 except ValueError:
                     is_numeric = False
