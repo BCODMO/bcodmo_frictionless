@@ -332,7 +332,7 @@ def test_load_use_filename():
     rows, datapackage, _ = Flow(*flows).results()
     assert datapackage
     assert len(datapackage.resources) == 1
-    assert datapackage.resources[0].name == "test.csv"
+    assert datapackage.resources[0].name == "test"
     assert len(datapackage.resources[0].schema.fields) == 4
 
     assert len(rows) == 1
@@ -352,5 +352,5 @@ def test_load_use_filename_multiple():
     rows, datapackage, _ = Flow(*flows).results()
     assert datapackage
     assert len(datapackage.resources) == 2
-    assert datapackage.resources[0].name == "test.csv"
-    assert datapackage.resources[1].name == "test.csv_2"
+    assert datapackage.resources[0].name == "test"
+    assert datapackage.resources[1].name == "test_2"
