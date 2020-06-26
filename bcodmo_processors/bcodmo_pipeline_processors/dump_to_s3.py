@@ -75,8 +75,6 @@ class S3Dumper(DumperBase):
             path = path[1:]
         obj_name = os.path.join(self.prefix, path)
         contents = contents.replace(WINDOWS_LINE_ENDING, UNIX_LINE_ENDING)
-        with open(f"/home/conrad/Documents/laminar_testing/{path}", "w") as f:
-            f.write(contents.decode())
 
         obj = self.s3.Object(self.bucket_name, obj_name)
         obj.put(Body=contents, ContentType=content_type)
