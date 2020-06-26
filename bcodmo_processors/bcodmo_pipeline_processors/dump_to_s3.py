@@ -12,6 +12,9 @@ from datapackage_pipelines.utilities.flow_utils import spew_flow
 from dataflows.processors.dumpers.dumper_base import DumperBase
 from dataflows.processors.dumpers.file_formats import CSVFormat, JSONFormat
 
+WINDOWS_LINE_ENDING = b"\r\n"
+UNIX_LINE_ENDING = b"\n"
+
 
 class S3Dumper(DumperBase):
     def __init__(self, bucket_name, prefix, **options):
@@ -71,6 +74,9 @@ class S3Dumper(DumperBase):
         if path.startswith("/"):
             path = path[1:]
         obj_name = os.path.join(self.prefix, path)
+        contents = contents.replace(WINDOWS_LINE_ENDING, UNIX_LINE_ENDING)
+        with open(f"/home/conrad/Documents/laminar_testing/{path}", "w") as f:
+            f.write(contents.decode())
 
         obj = self.s3.Object(self.bucket_name, obj_name)
         obj.put(Body=contents, ContentType=content_type)
