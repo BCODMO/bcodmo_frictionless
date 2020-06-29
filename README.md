@@ -42,6 +42,16 @@ _Other differences from the standard load_:
 - if `sheet_regex` is used `name` will be ignored and the sheet will be the resource name, unless there are multiple `from` values, in which case the name will be `{resource_name}-{sheet_name}`
 - `sheet_regex` can only be used with local paths
 
+_Additional fixedwidth parser:
+
+- 
+-  `width` - width between columns
+-  `infer` - whether the width should be inferred
+-  `parse_seabird_header` - parse a .cnv seabird file
+-  `seabird_capture_skipped_rows` - a list of dictionaries with the keys "column_name" and "regex". The regex is applied to all skipped rows and matched rows are stored as a column
+-  `fixedwidth_sample_size` - the number of rows to sample to infer the width
+
+
 See standard processor for examples.
 
 ### **_`bcodmo_pipeline_processors.concatenate`_**

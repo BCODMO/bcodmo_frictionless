@@ -11,7 +11,7 @@ import logging
 from bcodmo_processors.bcodmo_pipeline_processors import *
 
 
-TEST_DEV = os.environ.get("TEST_DEV", False)
+TEST_DEV = os.environ.get("TEST_DEV", False) == "true"
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
@@ -354,3 +354,26 @@ def test_load_use_filename_multiple():
     assert len(datapackage.resources) == 2
     assert datapackage.resources[0].name == "test"
     assert datapackage.resources[1].name == "test_2"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_capture_skipped_rows():
+    flows = [
+        load(
+            {
+                "from": "data/seabird_load.cnv",
+                "name": "res",
+                "format": "bcodmo-fixedwidth",
+                "infer": True,
+                "parse_seabird_header": True,
+                "deduplicate_headers": True,
+                "skip_rows": ["#", "*"],
+                "seabird_capture_skipped_rows": [
+                    {"column_name": "test1", "regex": "# start_time = (.*)"}
+                ],
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert "test1" in rows[0][0]
+    assert rows[0][0]["test1"] == "Apr 27 2018 01:53:55 [NMEA time, header]"

@@ -6,7 +6,7 @@ from decimal import Decimal
 from bcodmo_processors.bcodmo_pipeline_processors import *
 
 
-TEST_DEV = os.environ.get("TEST_DEV", False)
+TEST_DEV = os.environ.get("TEST_DEV", False) == "true"
 
 data = [
     {"col1": 4.323},
@@ -31,6 +31,7 @@ def test_round_fields():
     assert str(rows[0][4]["col1"]) == "311"
 
 
+@pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_round_fields_maxiumum_precision():
     flows = [
         data,
@@ -45,6 +46,7 @@ def test_round_fields_maxiumum_precision():
     assert str(rows[0][3]["col1"]) == "310.6"
 
 
+@pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_round_fields_convert_to_integer():
     flows = [
         data,
@@ -57,6 +59,7 @@ def test_round_fields_convert_to_integer():
     assert datapackage.resources[0].schema.fields[0].type == "integer"
 
 
+@pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_preserve_trailing_zeros():
     flows = [
         data,

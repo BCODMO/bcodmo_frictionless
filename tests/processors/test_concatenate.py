@@ -6,7 +6,7 @@ from decimal import Decimal
 from bcodmo_processors.bcodmo_pipeline_processors import *
 
 
-TEST_DEV = os.environ.get("TEST_DEV", False)
+TEST_DEV = os.environ.get("TEST_DEV", False) == "true"
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")

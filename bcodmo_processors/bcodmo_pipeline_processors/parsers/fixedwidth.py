@@ -31,6 +31,7 @@ class FixedWidthParser(Parser):
         "parse_seabird_header",
         "fixedwidth_skip_header",
         "fixedwidth_sample_size",
+        "seabird_capture_skipped_rows",
     ]
 
     def __init__(
@@ -40,6 +41,7 @@ class FixedWidthParser(Parser):
         width=None,
         infer=None,
         parse_seabird_header=False,
+        seabird_capture_skipped_rows=[],
         fixedwidth_skip_header=[],
         fixedwidth_sample_size=100,
     ):
@@ -54,6 +56,7 @@ class FixedWidthParser(Parser):
             self.__fixedwidth_skip_header.append("#")
         # Sample size for the pandas fixed width parser
         self.__fixedwidth_sample_size = fixedwidth_sample_size
+        self.__seabird_capture_skipped_rows = seabird_capture_skipped_rows
         self.__force_parse = force_parse
         self.__extended_rows = None
         self.__encoding = None
@@ -99,12 +102,22 @@ class FixedWidthParser(Parser):
         last_item = None
         file_pos = None
         header_values = []
+        captured_rows = []
         for item in iter(items.readline, ""):
             last_item = item
             if self.__parse_seabird_header:
                 match = re.match("^# name \d* = (.*):.*$", item)
                 if match:
                     header_values.append(match.groups()[0])
+
+                for c in self.__seabird_capture_skipped_rows:
+                    match = re.match(c["regex"], item)
+                    if match:
+                        print("GOT A MATCH", item)
+                        captured_rows.append(
+                            {"name": c["column_name"], "value": match.groups()[0]}
+                        )
+
             is_comment = False
             for skip_str in self.__fixedwidth_skip_header:
                 if item.startswith(skip_str):
@@ -113,6 +126,7 @@ class FixedWidthParser(Parser):
             if not is_comment:
                 break
             file_pos = items.tell()
+        print("header values", header_values)
 
         # Set the header value to the parsed result
         if self.__parse_seabird_header:
@@ -121,6 +135,9 @@ class FixedWidthParser(Parser):
                     f"The inferred header is of length {len(header_values)} but there are {len(width)} width values"
                 )
             # Yield the header value as the first row
+            for captured_row in captured_rows:
+                header_values.append(captured_row["name"])
+            print("header values after", header_values)
             yield (1, None, header_values)
 
         # Set stream back to previous value
@@ -154,4 +171,6 @@ class FixedWidthParser(Parser):
             for index, row in chunk.iterrows():
                 l = row.tolist()
                 l = [str(item) for item in l]
+                for captured_row in captured_rows:
+                    l.append(captured_row["value"])
                 yield (index + 1 + index_offset, None, l)

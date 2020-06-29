@@ -8,7 +8,7 @@ import dateutil
 from bcodmo_processors.bcodmo_pipeline_processors import *
 
 
-TEST_DEV = os.environ.get("TEST_DEV", False)
+TEST_DEV = os.environ.get("TEST_DEV", False) == "true"
 
 data_1 = [
     {"latitude": "14° 24.0' N"},
