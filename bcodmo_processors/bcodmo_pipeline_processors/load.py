@@ -242,7 +242,6 @@ def load(_from, parameters):
                         xls = xlrd.open_workbook(file_contents=data, on_demand=True)
                         # xls = xlrd.open_workbook(io.BytesIO(data), on_demand=True)
                         elapsed = time.time() - start
-                        print(f"Took {elapsed} to get the regular expression sheet")
                     else:
                         xls = xlrd.open_workbook(url, on_demand=True)
                 except FileNotFoundError:
@@ -278,7 +277,6 @@ def load(_from, parameters):
 
             # Create load processors for all of these sheets
             for sheet_name in sheets:
-                print("looping through sheets", sheet_name)
                 new_name = clean_resource_name(str(sheet_name))
                 if len(from_list) > 1 or _use_filename:
                     # If there are multiple urls being loaded, have the name take that into account

@@ -54,6 +54,8 @@ class FixedWidthParser(Parser):
         # Ensure that # is included in seabird files, because that's how we will parse the header
         if parse_seabird_header and "#" not in self.__fixedwidth_skip_header:
             self.__fixedwidth_skip_header.append("#")
+        if parse_seabird_header and "*" not in self.__fixedwidth_skip_header:
+            self.__fixedwidth_skip_header.append("*")
         # Sample size for the pandas fixed width parser
         self.__fixedwidth_sample_size = fixedwidth_sample_size
         self.__seabird_capture_skipped_rows = seabird_capture_skipped_rows
@@ -113,7 +115,6 @@ class FixedWidthParser(Parser):
                 for c in self.__seabird_capture_skipped_rows:
                     match = re.match(c["regex"], item)
                     if match:
-                        print("GOT A MATCH", item)
                         captured_rows.append(
                             {"name": c["column_name"], "value": match.groups()[0]}
                         )
@@ -126,7 +127,6 @@ class FixedWidthParser(Parser):
             if not is_comment:
                 break
             file_pos = items.tell()
-        print("header values", header_values)
 
         # Set the header value to the parsed result
         if self.__parse_seabird_header:
@@ -137,7 +137,6 @@ class FixedWidthParser(Parser):
             # Yield the header value as the first row
             for captured_row in captured_rows:
                 header_values.append(captured_row["name"])
-            print("header values after", header_values)
             yield (1, None, header_values)
 
         # Set stream back to previous value
