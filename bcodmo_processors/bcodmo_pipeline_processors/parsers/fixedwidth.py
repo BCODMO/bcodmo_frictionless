@@ -32,6 +32,8 @@ class FixedWidthParser(Parser):
         "fixedwidth_skip_header",
         "fixedwidth_sample_size",
         "seabird_capture_skipped_rows",
+        "seabird_capture_skipped_rows_join",
+        "seabird_capture_skipped_rows_join_string",
     ]
 
     def __init__(
@@ -42,6 +44,8 @@ class FixedWidthParser(Parser):
         infer=None,
         parse_seabird_header=False,
         seabird_capture_skipped_rows=[],
+        seabird_capture_skipped_rows_join=True,
+        seabird_capture_skipped_rows_join_string=";",
         fixedwidth_skip_header=[],
         fixedwidth_sample_size=100,
     ):
@@ -59,6 +63,10 @@ class FixedWidthParser(Parser):
         # Sample size for the pandas fixed width parser
         self.__fixedwidth_sample_size = fixedwidth_sample_size
         self.__seabird_capture_skipped_rows = seabird_capture_skipped_rows
+        self.__seabird_capture_skipped_rows_join = seabird_capture_skipped_rows_join
+        self.__seabird_capture_skipped_rows_join_string = (
+            seabird_capture_skipped_rows_join_string
+        )
         self.__force_parse = force_parse
         self.__extended_rows = None
         self.__encoding = None
@@ -104,7 +112,7 @@ class FixedWidthParser(Parser):
         last_item = None
         file_pos = None
         header_values = []
-        captured_rows = []
+        captured_rows_dict = {}
         for item in iter(items.readline, ""):
             last_item = item
             if self.__parse_seabird_header:
@@ -115,9 +123,10 @@ class FixedWidthParser(Parser):
                 for c in self.__seabird_capture_skipped_rows:
                     match = re.match(c["regex"], item)
                     if match:
-                        captured_rows.append(
-                            {"name": c["column_name"], "value": match.groups()[0]}
-                        )
+                        column_name = c["column_name"]
+                        if column_name not in captured_rows_dict:
+                            captured_rows_dict[column_name] = []
+                        captured_rows_dict[column_name].append(match.groups()[0])
 
             is_comment = False
             for skip_str in self.__fixedwidth_skip_header:
@@ -127,6 +136,27 @@ class FixedWidthParser(Parser):
             if not is_comment:
                 break
             file_pos = items.tell()
+
+        captured_rows = []
+
+        for header_name, v in captured_rows_dict.items():
+            if self.__seabird_capture_skipped_rows_join:
+                captured_rows.append(
+                    {
+                        "name": header_name,
+                        "value": self.__seabird_capture_skipped_rows_join_string.join(
+                            v
+                        ),
+                    }
+                )
+            else:
+                for value in v:
+                    captured_rows.append(
+                        {"name": header_name, "value": value,}
+                    )
+        # captured_rows_dict.append(
+        #    {"name": c["column_name"], "value": match.groups()[0]}
+        # )
 
         # Set the header value to the parsed result
         if self.__parse_seabird_header:

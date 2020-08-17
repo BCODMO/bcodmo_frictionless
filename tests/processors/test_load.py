@@ -377,3 +377,75 @@ def test_load_capture_skipped_rows():
     rows, datapackage, _ = Flow(*flows).results()
     assert "test1" in rows[0][0]
     assert rows[0][0]["test1"] == "Apr 27 2018 01:53:55 [NMEA time, header]"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_capture_skipped_rows_multiple_matches():
+    flows = [
+        load(
+            {
+                "from": "data/seabird_load.cnv",
+                "name": "res",
+                "format": "bcodmo-fixedwidth",
+                "infer": True,
+                "parse_seabird_header": True,
+                "deduplicate_headers": True,
+                "skip_rows": ["#", "*"],
+                "seabird_capture_skipped_rows": [
+                    {"column_name": "test1", "regex": "\*\* (.*)"}
+                ],
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert "test1" in rows[0][0]
+    assert rows[0][0]["test1"] == "Testing match multiple;another match;again"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_capture_skipped_rows_multiple_matches_no_join():
+    flows = [
+        load(
+            {
+                "from": "data/seabird_load.cnv",
+                "name": "res",
+                "format": "bcodmo-fixedwidth",
+                "infer": True,
+                "parse_seabird_header": True,
+                "deduplicate_headers": True,
+                "skip_rows": ["#", "*"],
+                "seabird_capture_skipped_rows": [
+                    {"column_name": "test1", "regex": "\*\* (.*)"}
+                ],
+                "seabird_capture_skipped_rows_join": False,
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert "test1" not in rows[0][0]
+    assert rows[0][0]["test1 (1)"] == "Testing match multiple"
+    assert rows[0][0]["test1 (2)"] == "another match"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_capture_skipped_rows_multiple_matches_separator():
+    flows = [
+        load(
+            {
+                "from": "data/seabird_load.cnv",
+                "name": "res",
+                "format": "bcodmo-fixedwidth",
+                "infer": True,
+                "parse_seabird_header": True,
+                "deduplicate_headers": True,
+                "skip_rows": ["#", "*"],
+                "seabird_capture_skipped_rows": [
+                    {"column_name": "test1", "regex": "\*\* (.*)"}
+                ],
+                "seabird_capture_skipped_rows_join_string": ":",
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert "test1" in rows[0][0]
+    assert rows[0][0]["test1"] == "Testing match multiple:another match:again"
