@@ -32,6 +32,9 @@ data_5 = [{"col1": "43510.32"}]
 # test order
 data_6 = [{"fake1": "data", "col1": "12/31/1995", "fake2": "data"}]
 
+# decimalYear
+data_7 = [{"col1": "2019.9384"}]
+
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_convert_date_datetime():
@@ -208,6 +211,28 @@ def test_convert_date_decimal_day():
     ]
     rows, datapackage, _ = Flow(*flows).results()
     assert rows[0][0]["datetime_field"] == dateutil.parser.parse("3/15/1995 7:46:33.6")
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_convert_date_decimal_year():
+    flows = [
+        data_7,
+        convert_date(
+            {
+                "fields": [
+                    {
+                        "input_type": "decimalYear",
+                        "input_field": "col1",
+                        "output_field": "datetime_field",
+                        "output_format": "%Y-%m-%dT%H:%M:%SZ",
+                        "output_type": "datetime",
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert rows[0][0]["datetime_field"] == dateutil.parser.parse("12/09/2019 7:46:33.6")
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")

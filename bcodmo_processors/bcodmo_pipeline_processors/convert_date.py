@@ -23,6 +23,10 @@ from bcodmo_processors.bcodmo_pipeline_processors.helper import get_missing_valu
 EXCEL_START_DATE = datetime(1899, 12, 30)
 
 
+def is_leap(year):
+    return (year % 4) == 0 and ((year % 100) != 0 or (year % 400) == 0)
+
+
 def process_resource(
     rows, fields, missing_values, datapackage_fields, boolean_statement=None
 ):
@@ -180,9 +184,10 @@ def process_resource(
                 elif (
                     field["input_type"] == "excel"
                     or field["input_type"] == "decimalDay"
+                    or field["input_type"] == "decimalYear"
                 ):
                     """
-                    Handle excel number and decimal as day of year datetimes
+                    Handle excel number, decimal as day of year, and decimal as day and year in time datetimes
 
                     takes in input_field, output_field and output_format
                         - decimalDay also takes in Year
@@ -219,6 +224,17 @@ def process_resource(
                     # Do the math to convert to a date
                     if field["input_type"] == "excel":
                         output_date_obj = EXCEL_START_DATE + timedelta(days=row_value)
+                    elif field["input_type"] == "decimalYear":
+                        # Handle decimalYear
+                        year = int(row_value)
+                        print("row value", row_value, (float(row_value) - year) * (365))
+                        d = timedelta(
+                            days=(float(row_value) - year)
+                            * (365 + 1 if is_leap(year) else 0)
+                        )
+                        print("is leap", is_leap(year), d, year)
+                        day_one = datetime(year, 1, 1)
+                        output_date_obj = d + day_one
                     else:
                         year = field.get("year", None)
                         if not year:
