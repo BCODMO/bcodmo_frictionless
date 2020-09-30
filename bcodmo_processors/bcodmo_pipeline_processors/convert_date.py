@@ -225,14 +225,24 @@ def process_resource(
                     if field["input_type"] == "excel":
                         output_date_obj = EXCEL_START_DATE + timedelta(days=row_value)
                     elif field["input_type"] == "decimalYear":
+                        start_day = field.get("decimal_year_start_day", None)
+                        if not start_day:
+                            raise Exception(
+                                f'"decimal_year_start_day" must be specified if input type is decimalYear'
+                            )
+                        try:
+                            start_day = int(start_day)
+
+                        except Exception as e:
+                            raise Exception(
+                                f"decimal_year_start_day {start_day} could not be converted to an integer"
+                            )
                         # Handle decimalYear
                         year = int(row_value)
-                        print("row value", row_value, (float(row_value) - year) * (365))
+                        decimal_part = float(row_value) - year
                         d = timedelta(
-                            days=(float(row_value) - year)
-                            * (365 + 1 if is_leap(year) else 0)
-                        )
-                        print("is leap", is_leap(year), d, year)
+                            days=(decimal_part * (365 + (1 if is_leap(year) else 0)))
+                        ) - timedelta(days=start_day)
                         day_one = datetime(year, 1, 1)
                         output_date_obj = d + day_one
                     else:

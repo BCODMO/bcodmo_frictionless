@@ -33,7 +33,7 @@ data_5 = [{"col1": "43510.32"}]
 data_6 = [{"fake1": "data", "col1": "12/31/1995", "fake2": "data"}]
 
 # decimalYear
-data_7 = [{"col1": "2019.9384"}]
+data_7 = [{"col1": "2019.938396"}]
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
@@ -214,7 +214,6 @@ def test_convert_date_decimal_day():
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
-@pytest.mark.skipif(True, reason="implementation waiting")
 def test_convert_date_decimal_year():
     flows = [
         data_7,
@@ -224,6 +223,7 @@ def test_convert_date_decimal_year():
                     {
                         "input_type": "decimalYear",
                         "input_field": "col1",
+                        "decimal_year_start_day": "1",
                         "output_field": "datetime_field",
                         "output_format": "%Y-%m-%dT%H:%M:%SZ",
                         "output_type": "datetime",
@@ -233,7 +233,33 @@ def test_convert_date_decimal_year():
         ),
     ]
     rows, datapackage, _ = Flow(*flows).results()
-    assert rows[0][0]["datetime_field"] == dateutil.parser.parse("12/09/2019 7:46:33.6")
+    print(rows[0])
+    assert rows[0][0]["datetime_field"] == dateutil.parser.parse(
+        "12/08/2019 12:20:56.256"
+    )
+
+    flows = [
+        data_7,
+        convert_date(
+            {
+                "fields": [
+                    {
+                        "input_type": "decimalYear",
+                        "input_field": "col1",
+                        "decimal_year_start_day": "0",
+                        "output_field": "datetime_field",
+                        "output_format": "%Y-%m-%dT%H:%M:%SZ",
+                        "output_type": "datetime",
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    print(rows[0])
+    assert rows[0][0]["datetime_field"] == dateutil.parser.parse(
+        "12/09/2019 12:20:56.256"
+    )
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
