@@ -46,22 +46,39 @@ def process_resource(
                     continue
                 row_value = str(row_value)
 
-                pattern = field["pattern"]
-                match = re.search(pattern, row_value)
-                # Ensure there is a match
-                if not match:
+                pattern = field.get("pattern", None)
+                delimiter = field.get("delimiter", None)
+                if pattern:
+                    match = re.search(pattern, row_value)
+                    # Ensure there is a match
+                    if not match:
+                        raise Exception(
+                            f'Match not found for expression "{pattern}" and value "{row_value}"'
+                        )
+                    groups = match.groups()
+                    if len(groups) != len(output_fields):
+                        raise Exception(
+                            f'Found a different number of matches to the number of output fields: "{groups}" and "{output_fields}"'
+                        )
+                    for index in range(len(groups)):
+                        string = groups[index]
+                        output_field = output_fields[index]
+                        row[output_field] = string
+                elif delimiter:
+                    matches = row_value.split(delimiter)
+                    if len(matches) != len(output_fields):
+                        raise Exception(
+                            f'Found a different number of split results than the number of output fields: "{matches}" and "{output_fields}"'
+                        )
+                    for index in range(len(matches)):
+                        string = matches[index]
+                        output_field = output_fields[index]
+                        row[output_field] = string
+
+                else:
                     raise Exception(
-                        f'Match not found for expression "{pattern}" and value "{row_value}"'
+                        "One of pattern or delimiter must be passed into the split_column processor"
                     )
-                groups = match.groups()
-                if len(groups) != len(output_fields):
-                    raise Exception(
-                        f'Found a different number of matches to the number of output fields: "{groups}" and "{output_fields}"'
-                    )
-                for index in range(len(groups)):
-                    string = groups[index]
-                    output_field = output_fields[index]
-                    row[output_field] = string
 
             yield row
         except Exception as e:
