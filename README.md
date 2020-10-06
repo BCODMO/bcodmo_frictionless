@@ -136,8 +136,10 @@ _Parameters_:
 - `fields` - a list of new_fields
   - `output_field` - the name of the output field
   - `output_format` - the python datetime format string for the output field
-  - `input_type` - the input field type. One of 'python' or 'excel'. If 'python', evaluate the input field/fields using python format strings. If 'excel', only take in a single input field and evaluate it as an excel date serial number.
+  - `input_type` - the input field type. One of 'python', 'decimalDay', 'decimalYear', or 'excel'. If 'python', evaluate the input field/fields using python format strings. If 'excel', only take in a single input field and evaluate it as an excel date serial number. If 'decimalDay', interpret the input field as decimal between 0 and 365. Year must also be inputted. If 'decimalYear', interpret the input field as a decimal year (eg. 2015.1234). If 'decimalYear', `decimal_year_start_day` is
+    required.
   - `input_field` - a single input field. Only use if `input_type` is 'excel'. Depecrated if `input_type` is 'python'.
+  - `decimal_year_start_day` - the start day to use when interpreting a decimal year. Usually 1 or 0.
 - `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
 
   **_the rest of the parameters are only relevant if input_type is 'python'_**
@@ -270,7 +272,8 @@ _Parameters_:
 - `fields` - a list of fields to perform this operation on
   - `input_field` - the name of the field to split
   - `output_fields` - the names of the output fields
-  - `pattern` - the pattern to match the input_field. Use python regular expression matches (denoted by parentheses) to capture values for `output_fields`
+  - `pattern` - the pattern to match the input_field. Use python regular expression matches (denoted by parentheses) to capture values for `output_fields. Use pattern or delimiter.`
+  - `delimiter` - the delimiter on which to split the input_field. Use pattern or delimiter.`
 - `delete_input` - whether the `input_field` should be deleted after the `output_fields` are created
 - `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
 
