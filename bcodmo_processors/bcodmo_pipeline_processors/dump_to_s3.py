@@ -94,6 +94,10 @@ class S3Dumper(DumperBase):
             except Exception as e:
                 logging.warn(f"Failed to save the pipeline-spec.yaml: {str(e)}",)
 
+        self.datapackage.descriptor["dump_path"] = self.prefix
+        self.datapackage.descriptor["dump_bucket"] = self.bucket_name
+        self.datapackage.commit()
+
         # Handle temporal_format_property
         if self.temporal_format_property:
             for resource in self.datapackage.descriptor["resources"]:
