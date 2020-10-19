@@ -15,6 +15,9 @@ from dataflows.processors.dumpers.file_formats import CSVFormat, JSONFormat
 WINDOWS_LINE_ENDING = b"\r\n"
 UNIX_LINE_ENDING = b"\n"
 
+WINDOWS_LINE_ENDING_STR = "\r\n"
+UNIX_LINE_ENDING_STR = "\n"
+
 
 class S3Dumper(DumperBase):
     def __init__(self, bucket_name, prefix, **options):
@@ -178,8 +181,10 @@ class S3Dumper(DumperBase):
         while len(data) > 0:
             data = tfile.read(1024)
             if isinstance(data, str):
+                data = data.replace(WINDOWS_LINE_ENDING_STR, UNIX_LINE_ENDING_STR)
                 hasher.update(data.encode("utf8"))
             elif isinstance(data, bytes):
+                data = data.replace(WINDOWS_LINE_ENDING, UNIX_LINE_ENDING)
                 hasher.update(data)
         return hasher
 
