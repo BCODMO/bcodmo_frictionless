@@ -273,7 +273,7 @@ _Parameters_:
   - `input_field` - the name of the field to split
   - `output_fields` - the names of the output fields
   - `pattern` - the pattern to match the input_field. Use python regular expression matches (denoted by parentheses) to capture values for `output_fields. Use pattern or delimiter.`
-  - `delimiter` - the delimiter on which to split the input_field. Use pattern or delimiter.`
+  - `delimiter` - the regex delimiter on which to split the input_field. Use pattern or delimiter.`
 - `delete_input` - whether the `input_field` should be deleted after the `output_fields` are created
 - `boolean_statement` - a single boolean statement. Only rows that pass the statement will be impacted. See `boolean_add_computed_field` for details on boolean syntax.
 
