@@ -65,7 +65,7 @@ def process_resource(
                         output_field = output_fields[index]
                         row[output_field] = string
                 elif delimiter:
-                    matches = row_value.split(delimiter)
+                    matches = re.split(delimiter, row_value)
                     if len(matches) != len(output_fields):
                         raise Exception(
                             f'Found a different number of split results than the number of output fields: "{matches}" and "{output_fields}"'

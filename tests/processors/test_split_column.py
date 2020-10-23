@@ -13,6 +13,11 @@ data = [
     {"col1": "foo bar"},
 ]
 
+data2 = [
+    {"col1": "hello     world"},
+    {"col1": "foo bar"},
+]
+
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_split_column():
@@ -76,5 +81,26 @@ def test_split_basename():
     ]
     rows, datapackage, _ = Flow(*flows).results()
     assert rows[0][0]["col1"] == "hello world"
+    assert rows[0][0]["f1"] == "hello"
+    assert rows[0][0]["f2"] == "world"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_split_delimiter_regex():
+    flows = [
+        data2,
+        split_column(
+            {
+                "fields": [
+                    {
+                        "input_field": "col1",
+                        "delimiter": "\s+",
+                        "output_fields": ["f1", "f2"],
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
     assert rows[0][0]["f1"] == "hello"
     assert rows[0][0]["f2"] == "world"
