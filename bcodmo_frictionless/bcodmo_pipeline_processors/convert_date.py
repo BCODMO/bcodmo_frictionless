@@ -13,11 +13,11 @@ from datapackage_pipelines.wrapper import ingest
 from datapackage_pipelines.utilities.flow_utils import spew_flow
 
 
-from bcodmo_processors.bcodmo_pipeline_processors.boolean_processor_helper import (
+from bcodmo_frictionless.bcodmo_pipeline_processors.boolean_processor_helper import (
     get_expression,
     check_line,
 )
-from bcodmo_processors.bcodmo_pipeline_processors.helper import get_missing_values
+from bcodmo_frictionless.bcodmo_pipeline_processors.helper import get_missing_values
 
 
 EXCEL_START_DATE = datetime(1899, 12, 30)

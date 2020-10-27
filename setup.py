@@ -12,12 +12,12 @@ required = [
 
 
 setup(
-    name="bcodmo_processors",
-    version="v2.0.4",
-    description="BCODMO Custom Processors",
+    name="bcodmo_frictionless",
+    version="v2.0.6",
+    description="BCODMO Custom Processors and Checks",
     author="BCODMO",
     author_email="conrad.schloer@gmail.com",
-    url="https://github.com/bcodmo/bcodmo_processors",
+    url="https://github.com/bcodmo/bcodmo_frictionless",
     packages=find_packages(),
     install_requires=required,
     include_package_data=True,

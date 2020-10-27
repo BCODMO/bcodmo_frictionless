@@ -1,6 +1,7 @@
-# bcodmo_processors
+# bcodmo_frictionless
 
-Custom datapackage-pipelines processors for BCODMO
+
+Custom dataflows processors and goodtables checks for BCODMO
 
 To run the dpp command locally using the custom processors located in this repository, simply clone this reposistory and add the environment variable DPP_PROCESSOR_PATH.
 If this repository is located at $PROCESSOR_REPO, the environment variable will be $PROCESSOR_REPO/bcodmo_processors.

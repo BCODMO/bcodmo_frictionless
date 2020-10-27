@@ -17,7 +17,7 @@ from tabulator.helpers import requote_uri
 
 
 # Import custom parsers here
-from bcodmo_processors.bcodmo_pipeline_processors.parsers import FixedWidthParser
+from bcodmo_frictionless.bcodmo_pipeline_processors.parsers import FixedWidthParser
 
 # Add custom parsers here
 # Custom parsers should NOT have periods in their name

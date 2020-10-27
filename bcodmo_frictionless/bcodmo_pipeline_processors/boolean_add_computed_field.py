@@ -10,14 +10,14 @@ from datapackage_pipelines.wrapper import ingest
 from datapackage_pipelines.utilities.flow_utils import spew_flow
 
 
-from bcodmo_processors.bcodmo_pipeline_processors.boolean_processor_helper import (
+from bcodmo_frictionless.bcodmo_pipeline_processors.boolean_processor_helper import (
     NULL_VALUES,
     get_expression,
     math_expr,
     parse_boolean,
     parse_math,
 )
-from bcodmo_processors.bcodmo_pipeline_processors.helper import get_missing_values
+from bcodmo_frictionless.bcodmo_pipeline_processors.helper import get_missing_values
 
 
 def process_resource(rows, fields, missing_values):

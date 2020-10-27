@@ -8,7 +8,7 @@ from moto import mock_s3
 from tabulator.exceptions import IOError as TabulatorIOError
 import logging
 
-from bcodmo_processors.bcodmo_pipeline_processors import *
+from bcodmo_frictionless.bcodmo_pipeline_processors import *
 
 
 TEST_DEV = os.environ.get("TEST_DEV", False) == "true"
