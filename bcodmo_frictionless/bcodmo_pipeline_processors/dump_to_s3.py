@@ -84,7 +84,7 @@ class S3Dumper(DumperBase):
         obj = self.s3.Object(self.bucket_name, obj_name)
         obj.put(Body=contents, ContentType=content_type)
 
-        return path
+        return path, len(contents)
 
     def handle_datapackage(self):
         if self.save_pipeline_spec and self.pipeline_spec:
@@ -140,13 +140,6 @@ class S3Dumper(DumperBase):
             if descriptor["name"] == resource.res.descriptor["name"]:
                 resource_descriptor = descriptor
 
-        # File size:
-        filesize = stream.tell()
-        DumperBase.inc_attr(
-            self.datapackage.descriptor, self.datapackage_bytes, filesize
-        )
-        DumperBase.inc_attr(resource_descriptor, self.resource_bytes, filesize)
-
         # File Hash:
         if self.resource_hash:
             hasher = S3Dumper.hash_handler(stream)
@@ -159,10 +152,16 @@ class S3Dumper(DumperBase):
 
         # Finalise
         stream.seek(0)
-        self.write_file_to_output(
+        _, filesize = self.write_file_to_output(
             stream.read().encode(), resource.res.source, "text/csv"
         )
         stream.close()
+
+        # Update filesize
+        DumperBase.inc_attr(
+            self.datapackage.descriptor, self.datapackage_bytes, filesize
+        )
+        DumperBase.inc_attr(resource_descriptor, self.resource_bytes, filesize)
 
     def process_resource(self, resource):
         if resource.res.name in self.file_formatters:
