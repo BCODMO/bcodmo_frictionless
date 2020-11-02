@@ -35,6 +35,9 @@ data_6 = [{"fake1": "data", "col1": "12/31/1995", "fake2": "data"}]
 # decimalYear
 data_7 = [{"col1": "2019.938396"}]
 
+# matlab
+data_8 = [{"col1": "737117.593762207"}]
+
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_convert_date_datetime():
@@ -312,3 +315,27 @@ def test_convert_date_order():
     after_field_names = [f.name for f in datapackage.resources[0].schema.fields]
 
     assert prev_field_names == after_field_names
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_convert_date_matlab():
+    flows = [
+        data_8,
+        convert_date(
+            {
+                "fields": [
+                    {
+                        "input_type": "matlab",
+                        "input_field": "col1",
+                        "output_field": "datetime_field",
+                        "output_format": "%Y-%m-%dT%H:%M:%SZ",
+                        "output_type": "datetime",
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert rows[0][0]["datetime_field"] == dateutil.parser.parse(
+        "2018-02-26-26 14:15:01.054681"
+    )
