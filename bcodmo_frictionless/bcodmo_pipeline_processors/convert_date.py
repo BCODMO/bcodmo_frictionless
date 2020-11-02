@@ -183,6 +183,7 @@ def process_resource(
 
                 elif (
                     field["input_type"] == "excel"
+                    or field["input_type"] == "matlab"
                     or field["input_type"] == "decimalDay"
                     or field["input_type"] == "decimalYear"
                 ):
@@ -212,7 +213,10 @@ def process_resource(
 
                     # Convert the row to a number
                     try:
-                        if field["input_type"] == "excel":
+                        if (
+                            field["input_type"] == "excel"
+                            or field["input_type"] == "matlab"
+                        ):
                             row_value = float(row_value)
                         else:
                             row_value = Decimal(row_value)
@@ -224,6 +228,10 @@ def process_resource(
                     # Do the math to convert to a date
                     if field["input_type"] == "excel":
                         output_date_obj = EXCEL_START_DATE + timedelta(days=row_value)
+                    elif field["input_type"] == "matlab":
+                        day = datetime.fromordinal(int(row_value))
+                        dayfrac = timedelta(days=row_value % 1) - timedelta(days=366)
+                        output_date_obj = day + dayfrac
                     elif field["input_type"] == "decimalYear":
                         start_day = field.get("decimal_year_start_day", None)
                         if not start_day:

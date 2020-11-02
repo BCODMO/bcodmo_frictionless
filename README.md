@@ -137,7 +137,7 @@ _Parameters_:
 - `fields` - a list of new_fields
   - `output_field` - the name of the output field
   - `output_format` - the python datetime format string for the output field
-  - `input_type` - the input field type. One of 'python', 'decimalDay', 'decimalYear', or 'excel'. If 'python', evaluate the input field/fields using python format strings. If 'excel', only take in a single input field and evaluate it as an excel date serial number. If 'decimalDay', interpret the input field as decimal between 0 and 365. Year must also be inputted. If 'decimalYear', interpret the input field as a decimal year (eg. 2015.1234). If 'decimalYear', `decimal_year_start_day` is
+  - `input_type` - the input field type. One of 'python', 'decimalDay', 'decimalYear', "matlab", or 'excel'. If 'python', evaluate the input field/fields using python format strings. If 'excel', only take in a single input field and evaluate it as an excel date serial number. If 'matlab', also only take ina  single input fioeld and evaluate and matlab datenum type. If 'decimalDay', interpret the input field as decimal between 0 and 365. Year must also be inputted. If 'decimalYear', interpret the input field as a decimal year (eg. 2015.1234). If 'decimalYear', `decimal_year_start_day` is
     required.
   - `input_field` - a single input field. Only use if `input_type` is 'excel'. Depecrated if `input_type` is 'python'.
   - `decimal_year_start_day` - the start day to use when interpreting a decimal year. Usually 1 or 0.
