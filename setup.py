@@ -6,7 +6,7 @@ required = [
     "datapackage-pipelines @ git+https://github.com/frictionlessdata/datapackage-pipelines.git@d78d1391adf6470ca484303e512e038f7dc57483",
     "pyparsing==2.2.0",
     "dataflows==0.1.1",
-    "tabulator==1.52.3",
+    "tabulator==1.52.5",
     "tableschema==1.15.0",
     "goodtables==2.5.0",
 ]
