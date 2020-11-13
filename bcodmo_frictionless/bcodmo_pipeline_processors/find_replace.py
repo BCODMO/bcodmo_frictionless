@@ -42,7 +42,7 @@ def _find_replace(rows, fields, missing_values, boolean_statement=None):
                             'The "replace" parameter is required for the find_replace processor'
                         )
                     val = new_row.get(name, None)
-                    if val != None:
+                    if val != None and val not in missing_values:
                         new_row[name] = re.sub(str(find), str(replace), str(val),)
         yield new_row
 
