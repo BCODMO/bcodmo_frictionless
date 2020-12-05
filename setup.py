@@ -7,7 +7,7 @@ required = [
     "pyparsing==2.2.0",
     "dataflows==0.1.1",
     "tabulator==1.52.5",
-    "tableschema==1.15.0",
+    "tableschema==1.16.4",
     "goodtables==2.5.0",
 ]
 
