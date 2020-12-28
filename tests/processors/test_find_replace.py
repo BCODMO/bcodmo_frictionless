@@ -114,8 +114,13 @@ def test_find_replace_missing_value_allow():
                 "fields": [
                     {
                         "name": "col1",
-                        "patterns": [{"find": "^.*$", "replace": "test"}],
-                        "replace_missing_values": True,
+                        "patterns": [
+                            {
+                                "find": "^.*$",
+                                "replace": "test",
+                                "replace_missing_values": True,
+                            }
+                        ],
                     }
                 ]
             }

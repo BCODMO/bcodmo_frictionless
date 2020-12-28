@@ -134,11 +134,12 @@ def parse_boolean(row_counter, res, row, missing_data_values):
                 if f_type is date_type and s_type is datetime:
                     second_parsed = second_parsed.date()
 
-                if (
-                    first_parsed is None
-                    or second_parsed is None
-                    and operation in [">", ">=", "<", "<="]
-                ):
+                if (first_parsed is None or second_parsed is None) and operation in [
+                    ">",
+                    ">=",
+                    "<",
+                    "<=",
+                ]:
                     first_value = False
                 elif operation == ">":
                     first_value = first_parsed > second_parsed
