@@ -26,6 +26,7 @@ def _find_replace(rows, fields, missing_values, boolean_statement=None):
         if line_passed:
             for field in fields:
                 for pattern in field.get("patterns", []):
+                    replace_missing_values = field.get("replace_missing_values", False)
                     name = field.get("name", None)
                     find = pattern.get("find", None)
                     replace = pattern.get("replace", None)
@@ -42,7 +43,11 @@ def _find_replace(rows, fields, missing_values, boolean_statement=None):
                             'The "replace" parameter is required for the find_replace processor'
                         )
                     val = new_row.get(name, None)
-                    if val != None and val not in missing_values:
+                    if (
+                        val != None and val not in missing_values
+                    ) or replace_missing_values:
+                        if replace_missing_values and val is None:
+                            val = ""
                         new_row[name] = re.sub(str(find), str(replace), str(val),)
         yield new_row
 

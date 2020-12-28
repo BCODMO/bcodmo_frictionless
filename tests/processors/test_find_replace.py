@@ -96,3 +96,32 @@ def test_find_replace_missing_value():
     assert rows[0][0]["col1"] == "test"
     assert rows[0][1]["col1"] == "test"
     assert rows[0][2]["col1"] == None
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_find_replace_missing_value_allow():
+    flows = [
+        load(
+            {
+                "from": "data/test.csv",
+                "name": "res",
+                "format": "csv",
+                "override_schema": {"missingValues": ["def"]},
+            }
+        ),
+        find_replace(
+            {
+                "fields": [
+                    {
+                        "name": "col1",
+                        "patterns": [{"find": "^.*$", "replace": "test"}],
+                        "replace_missing_values": True,
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert rows[0][0]["col1"] == "test"
+    assert rows[0][1]["col1"] == "test"
+    assert rows[0][2]["col1"] == "test"
