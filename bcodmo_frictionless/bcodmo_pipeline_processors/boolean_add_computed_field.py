@@ -3,6 +3,8 @@ import functools
 import collections
 import logging
 import time
+import dateutil.parser
+import datetime
 
 from dataflows import Flow
 from dataflows.helpers.resource_matcher import ResourceMatcher
@@ -72,6 +74,15 @@ def process_resource(rows, fields, missing_values):
                             if new_val in NULL_VALUES:
                                 new_val = None
                             new_col = new_val
+
+                        field_type = field.get("type", None)
+                        if field_type in ["datetime", "date", "time"]:
+                            new_col = dateutil.parser.parse(new_col)
+                            if field_type == "date":
+                                new_col = new_col.date()
+                            if field_type == "time":
+                                new_col = new_col.strftime("%H:%M:%S")
+
                         new_row[field["target"]] = new_col
                     elif field["target"] not in new_row:
                         new_row[field["target"]] = None
