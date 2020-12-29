@@ -9,7 +9,7 @@ required = [
     "tabulator==1.52.5",
     "tableschema==1.16.4",
     "goodtables==2.5.0",
-    "python-dateutil==2.8.1",
+    "python-dateutil<2.8.1",
 ]
 
 
