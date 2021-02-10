@@ -19,6 +19,42 @@ WINDOWS_LINE_ENDING_STR = "\r\n"
 UNIX_LINE_ENDING_STR = "\n"
 
 
+def expand_scientific_notation(flt):
+    str_vals = str(flt).split("E")
+    coef = float(str_vals[0])
+    exp = int(str_vals[1])
+    return_val = ""
+    if int(exp) > 0:
+        return_val += str(coef).replace(".", "")
+        return_val += "".join(
+            ["0" for _ in range(0, abs(exp - len(str(coef).split(".")[1])))]
+        )
+    elif int(exp) < 0:
+        return_val += "0."
+        return_val += "".join(["0" for _ in range(0, abs(exp) - 1)])
+        return_val += str(coef).replace(".", "")
+    return return_val
+
+
+def num_to_string(num):
+    value = str(num)
+    print(value)
+    if "E" in value:
+        return expand_scientific_notation(value)
+    return value
+
+
+class CustomCSVFormat(CSVFormat):
+    # A custom CSVFormat that allows use to customize the serializer for decimal
+
+    SERIALIZERS = {**CSVFormat.SERIALIZERS, **{"number": num_to_string}}
+
+    def __init__(self, file, schema, use_titles=False, **options):
+        super(CustomCSVFormat, self).__init__(
+            file, schema, use_titles=use_titles, **options
+        )
+
+
 class S3Dumper(DumperBase):
     def __init__(self, bucket_name, prefix, **options):
         super(S3Dumper, self).__init__(options)
@@ -60,7 +96,9 @@ class S3Dumper(DumperBase):
             else:
                 _, file_format = os.path.splitext(resource.source)
                 file_format = file_format[1:]
-            file_formatter = {"csv": CSVFormat, "json": JSONFormat}.get(file_format)
+            file_formatter = {"csv": CustomCSVFormat, "json": JSONFormat}.get(
+                file_format
+            )
             if file_format is not None:
                 self.file_formatters[resource.name] = file_formatter
                 self.file_formatters[resource.name].prepare_resource(resource)
