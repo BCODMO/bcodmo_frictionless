@@ -449,3 +449,25 @@ def test_load_capture_skipped_rows_multiple_matches_separator():
     rows, datapackage, _ = Flow(*flows).results()
     assert "test1" in rows[0][0]
     assert rows[0][0]["test1"] == "Testing match multiple:another match:again"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_xlsx_scientific_notation():
+    flows = [
+        load(
+            {
+                "from": "data/test_scientific_notation.xlsx",
+                "name": "res",
+                "format": "xlsx",
+                "sheet": 1,
+                "preserve_formatting": True,
+                "infer_strategy": "strings",
+                "cast_strategy": "strings",
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    print(vars(datapackage.resources[0].schema.fields[0]))
+
+    assert len(rows) == 1
+    assert str(rows[0][0]["scientific_notation"]) == "4.273E-07"
