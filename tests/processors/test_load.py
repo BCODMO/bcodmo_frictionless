@@ -467,7 +467,6 @@ def test_load_xlsx_scientific_notation():
         )
     ]
     rows, datapackage, _ = Flow(*flows).results()
-    print(vars(datapackage.resources[0].schema.fields[0]))
 
     assert len(rows) == 1
     assert str(rows[0][0]["scientific_notation"]) == "4.273E-07"
