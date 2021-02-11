@@ -38,8 +38,8 @@ def expand_scientific_notation(flt):
 
 def num_to_string(num):
     value = str(num)
-    print(value)
     if "E" in value:
+        # Handle scientific notation
         return expand_scientific_notation(value)
     return value
 
