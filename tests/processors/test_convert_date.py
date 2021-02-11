@@ -38,6 +38,9 @@ data_7 = [{"col1": "2019.938396"}]
 # matlab
 data_8 = [{"col1": "737117.593762207"}]
 
+# Bug with set types
+data_9 = [{"col1": "2018-02-17", "col2": "05:54:44"}]
+
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_convert_date_datetime():
@@ -339,3 +342,40 @@ def test_convert_date_matlab():
     assert rows[0][0]["datetime_field"] == dateutil.parser.parse(
         "2018-02-26-26 14:15:01.054681"
     )
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_convert_date_set_types_bug():
+    # Fixing a bug that came up when setting the time type
+    flows = [
+        data_9,
+        set_types(
+            {
+                "types": {
+                    "col1": {
+                        "type": "date",
+                        "format": "%Y-%m-%d",
+                        "outputFormat": "%Y-%m-%d",
+                    },
+                    "col2": {"type": "time", "format": "%H:%M:%S",},
+                }
+            }
+        ),
+        convert_date(
+            {
+                "fields": [
+                    {
+                        "inputs": [
+                            {"field": "col1", "format": "%Y-%m-%d"},
+                            {"field": "col2", "format": "%H:%M:%S"},
+                        ],
+                        "output_field": "datetime_field",
+                        "output_format": "%Y-%m-%dT%H:%M:%SZ",
+                        "output_type": "datetime",
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert rows[0][0]["datetime_field"] == dateutil.parser.parse("2018-02-17T05:54:44")

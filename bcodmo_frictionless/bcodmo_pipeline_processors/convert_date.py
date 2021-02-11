@@ -90,7 +90,7 @@ def process_resource(
                                     ]
                                     input_string = val.strftime(str_format)
                                 else:
-                                    intput_string = str(val)
+                                    input_string = str(val)
 
                             else:
                                 input_string = str(val)
