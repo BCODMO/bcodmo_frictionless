@@ -470,3 +470,28 @@ def test_load_xlsx_scientific_notation():
 
     assert len(rows) == 1
     assert str(rows[0][0]["scientific_notation"]) == "4.273E-07"
+
+
+@mock_s3
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_s3_path_xlsx_regex_object_spaces():
+    # create bucket and put objects
+    conn = boto3.client("s3")
+    conn.create_bucket(Bucket="testing_bucket")
+    # add the file
+    conn.upload_file("data/test.xlsx", "testing_bucket", "test with spaces.xlsx")
+
+    flows = [
+        load(
+            {
+                "from": "s3://testing_bucket/test with spaces.xlsx",
+                "name": "res",
+                "format": "xlsx",
+                "sheet": "test\d",
+                "sheet_regex": True,
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert len(datapackage.resources) == 4
+    assert datapackage.resources[0].name == "test2"
