@@ -236,7 +236,7 @@ def load(_from, parameters):
 
                         start = time.time()
 
-                        parts = urlparse(requote_uri(url), allow_fragments=False)
+                        parts = urlparse(url, allow_fragments=False)
                         obj = s3.Object(parts.netloc, parts.path[1:])
                         data = obj.get()["Body"].read()
                         xls = xlrd.open_workbook(file_contents=data, on_demand=True)
