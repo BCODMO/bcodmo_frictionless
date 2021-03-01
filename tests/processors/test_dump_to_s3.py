@@ -134,3 +134,50 @@ def test_dump_scientific_notation():
     assert len(body)
     assert body == "scientific_notation\n0.0000004273\n"
     assert len(datapackage.resources) == 1
+
+    # Now set type to scientific notation
+    flows = [
+        load(
+            {
+                "from": "s3://testing_bucket/test_scientific_notation.xlsx",
+                "name": "res",
+                "format": "xlsx",
+                "sheet": 1,
+                "preserve_formatting": True,
+                "infer_strategy": "strings",
+                "cast_strategy": "strings",
+            }
+        ),
+        set_types(
+            {
+                "types": {
+                    "scientific_notation": {
+                        "type": "number",
+                        "numberOutputFormat": "scientificNotation",
+                    }
+                }
+            }
+        ),
+        dump_to_s3(
+            {
+                "prefix": "test",
+                "force-format": True,
+                "format": "csv",
+                "save_pipeline_spec": True,
+                "temporal_format_property": "outputFormat",
+                "bucket_name": "testing_dump_bucket",
+                "data_manager": "test",
+            }
+        ),
+    ]
+
+    rows, datapackage, _ = Flow(*flows).results()
+    body = (
+        conn.get_object(Bucket="testing_dump_bucket", Key="test/res.csv")["Body"]
+        .read()
+        .decode("utf-8")
+    )
+
+    assert len(body)
+    assert body == "scientific_notation\n4.273e-7\n"
+    assert len(datapackage.resources) == 1

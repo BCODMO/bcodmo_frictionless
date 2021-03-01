@@ -44,6 +44,10 @@ def num_to_string(num):
     return value
 
 
+def num_to_scientific_notation(num):
+    return "{:e}".format(num)
+
+
 class CustomCSVFormat(CSVFormat):
     # A custom CSVFormat that allows use to customize the serializer for decimal
 
@@ -53,6 +57,16 @@ class CustomCSVFormat(CSVFormat):
         super(CustomCSVFormat, self).__init__(
             file, schema, use_titles=use_titles, **options
         )
+
+        for field in schema.fields:
+            # support scientific notation
+            if field.type in ["number"]:
+                number_output_format = field.descriptor.get("numberOutputFormat", None)
+                if (
+                    number_output_format
+                    and number_output_format == "scientificNotation"
+                ):
+                    field.descriptor["serializer"] = num_to_scientific_notation
 
 
 class S3Dumper(DumperBase):
