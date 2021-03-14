@@ -379,3 +379,31 @@ def test_convert_date_set_types_bug():
     ]
     rows, datapackage, _ = Flow(*flows).results()
     assert rows[0][0]["datetime_field"] == dateutil.parser.parse("2018-02-17T05:54:44")
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_convert_date_string():
+    flows = [
+        data_2,
+        convert_date(
+            {
+                "fields": [
+                    {
+                        "inputs": [
+                            {"field": "col1", "format": "%m"},
+                            {"field": "col2", "format": "%d"},
+                        ],
+                        "output_field": "datetime_field",
+                        "output_format": "%Y-%m-%dT%H:%M:%SZ",
+                        "output_type": "string",
+                        "year": "1995",
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert rows[0][0]["datetime_field"] == dateutil.parser.parse("12/31/1995").strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    assert datapackage.resources[0].schema.fields[2].type == "string"

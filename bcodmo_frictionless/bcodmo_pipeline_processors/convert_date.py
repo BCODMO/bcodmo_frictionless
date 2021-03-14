@@ -47,7 +47,7 @@ def process_resource(
                 if not output_format:
                     raise Exception("Output format is required")
                 output_type = field.get("output_type", "datetime")
-                if output_type not in ["datetime", "date", "time"]:
+                if output_type not in ["datetime", "date", "time", "string"]:
                     raise Exception("Output type must be one of datetime, date or time")
 
                 if not line_passed:
@@ -292,6 +292,10 @@ def process_resource(
                         new_row[output_field] = new_row[output_field].date()
                     if output_type == "time":
                         new_row[output_field] = new_row[output_field].time()
+                    if output_type == "string":
+                        new_row[output_field] = new_row[output_field].strftime(
+                            output_format
+                        )
 
             yield new_row
         except Exception as e:
@@ -315,6 +319,8 @@ def convert_date(fields, resources=None, boolean_statement=None):
                         "type": f.get("output_type", "datetime"),
                         "outputFormat": f["output_format"],
                     }
+                    if f.get("output_type") != "string"
+                    else {"name": f["output_field"], "type": "string",}
                     for f in fields
                 }
 
