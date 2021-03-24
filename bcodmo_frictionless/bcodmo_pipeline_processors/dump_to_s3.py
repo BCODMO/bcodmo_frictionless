@@ -20,6 +20,11 @@ UNIX_LINE_ENDING_STR = "\n"
 
 
 def expand_scientific_notation(flt):
+    was_neg = False
+    if flt.startswith("-"):
+        was_neg = True
+        flt = flt[1:]
+
     str_vals = str(flt).split("E")
     coef = float(str_vals[0])
     exp = int(str_vals[1])
@@ -33,6 +38,8 @@ def expand_scientific_notation(flt):
         return_val += "0."
         return_val += "".join(["0" for _ in range(0, abs(exp) - 1)])
         return_val += str(coef).replace(".", "")
+    if was_neg:
+        return_val = "-" + return_val
     return return_val
 
 
@@ -146,7 +153,9 @@ class S3Dumper(DumperBase):
                 contents = self.pipeline_spec.encode()
                 self.write_file_to_output(contents, "pipeline-spec.yaml", "text/yaml")
             except Exception as e:
-                logging.warn(f"Failed to save the pipeline-spec.yaml: {str(e)}",)
+                logging.warn(
+                    f"Failed to save the pipeline-spec.yaml: {str(e)}",
+                )
 
         self.datapackage.descriptor["dump_path"] = self.prefix
         self.datapackage.descriptor["dump_bucket"] = self.bucket_name
