@@ -203,7 +203,7 @@ def process_resource(
                             )
                     else:
                         raise Exception(
-                            "input_field is required when input_type is excel"
+                            "input_field is required when input_type is excel, matlab, decimalDay or decimalYear."
                         )
 
                     row_value = new_row[input_field]
@@ -320,7 +320,10 @@ def convert_date(fields, resources=None, boolean_statement=None):
                         "outputFormat": f["output_format"],
                     }
                     if f.get("output_type") != "string"
-                    else {"name": f["output_field"], "type": "string",}
+                    else {
+                        "name": f["output_field"],
+                        "type": "string",
+                    }
                     for f in fields
                 }
 
