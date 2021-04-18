@@ -7,7 +7,7 @@ required = [
     "pyparsing==2.2.0",
     "dataflows==0.2.11",
     "tabulator==1.53.5",
-    #"tabulator @ git+https://github.com/BCODMO/tabulator-py.git@master",
+    # "tabulator @ git+https://github.com/BCODMO/tabulator-py.git@master",
     "tableschema==1.16.4",
     "goodtables==2.5.0",
     "python-dateutil==2.8.0",
