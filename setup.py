@@ -2,11 +2,11 @@ from setuptools import setup, find_packages
 
 required = [
     "pandas==0.25.3",
-    # "datapackage-pipelines==v2.1.10",
-    "datapackage-pipelines @ git+https://github.com/frictionlessdata/datapackage-pipelines.git@d78d1391adf6470ca484303e512e038f7dc57483",
+    "datapackage-pipelines==2.2.6",
+    # "datapackage-pipelines @ git+https://github.com/frictionlessdata/datapackage-pipelines.git@d78d1391adf6470ca484303e512e038f7dc57483",
     "pyparsing==2.2.0",
-    "dataflows==0.1.1",
-    #"tabulator==1.53.2",
+    "dataflows==0.2.11",
+    # "tabulator==1.53.2",
     "tabulator @ git+https://github.com/BCODMO/tabulator-py.git@master",
     "tableschema==1.16.4",
     "goodtables==2.5.0",
@@ -16,7 +16,7 @@ required = [
 
 setup(
     name="bcodmo_frictionless",
-    version="v2.10.1",
+    version="v2.10.2",
     description="BCODMO Custom Processors and Checks",
     author="BCODMO",
     author_email="conrad.schloer@gmail.com",
