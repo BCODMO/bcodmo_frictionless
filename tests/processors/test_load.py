@@ -86,7 +86,12 @@ def test_load_xlsx_sheet_regex():
 def test_load_xlsx_sheet_range():
     flows = [
         load(
-            {"from": "data/test.xlsx", "name": "res", "format": "xlsx", "sheet": "1-3",}
+            {
+                "from": "data/test.xlsx",
+                "name": "res",
+                "format": "xlsx",
+                "sheet": "1-3",
+            }
         )
     ]
     rows, datapackage, _ = Flow(*flows).results()
@@ -230,6 +235,25 @@ def test_load_seabird():
     }
 
 
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_seabird_infer_bug():
+    flows = [
+        load(
+            {
+                "from": "data/seabird_load_infer_bug.cnv",
+                "name": "res",
+                "format": "bcodmo-fixedwidth",
+                "infer": True,
+                "parse_seabird_header": True,
+                "deduplicate_headers": True,
+                "skip_rows": ["#", "*"],
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert rows[0][107]["t090C"] == Decimal("10.0697")
+
+
 @mock_s3
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_load_s3():
@@ -237,7 +261,13 @@ def test_load_s3():
     conn = boto3.client("s3")
     conn.create_bucket(Bucket="testing_bucket")
     flows = [
-        load({"from": "s3://testing_bucket/test.csv", "name": "res", "format": "csv",})
+        load(
+            {
+                "from": "s3://testing_bucket/test.csv",
+                "name": "res",
+                "format": "csv",
+            }
+        )
     ]
     try:
         rows, datapackage, _ = Flow(*flows).results()
@@ -254,7 +284,13 @@ def test_load_s3():
     conn.upload_file("data/test.csv", "testing_bucket", "test.csv")
 
     flows = [
-        load({"from": "s3://testing_bucket/test.csv", "name": "res", "format": "csv",})
+        load(
+            {
+                "from": "s3://testing_bucket/test.csv",
+                "name": "res",
+                "format": "csv",
+            }
+        )
     ]
     rows, datapackage, _ = Flow(*flows).results()
     assert len(datapackage.resources) == 1

@@ -48,7 +48,7 @@ _Additional fixedwidth parser:
 - 
 -  `width` - width between columns
 -  `infer` - whether the width should be inferred
--  `parse_seabird_header` - parse a .cnv seabird file
+-  `parse_seabird_header` - parse a .cnv seabird file. If infer is true, it will automatically set the field widths to 11 * len(header_row).
 -  `seabird_capture_skipped_rows` - a list of dictionaries with the keys "column_name" and "regex". The regex is applied to all skipped rows and matched rows are stored as a column
 -  `seabird_capture_skipped_rows_join` - a boolean determining if multiple matches should be joined or if they should each be in a seperate column (must be used with `deduplicate_headers` if false). Defaults to true
 -  `seabird_capture_skipped_rows_join_string` - the string to use to join multiple matches together (defaults to ;)

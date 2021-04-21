@@ -20,8 +20,7 @@ import logging
 
 
 class FixedWidthParser(Parser):
-    """Parser to parse FixedWidth data format.
-    """
+    """Parser to parse FixedWidth data format."""
 
     # Public
 
@@ -152,7 +151,10 @@ class FixedWidthParser(Parser):
             else:
                 for value in v:
                     captured_rows.append(
-                        {"name": header_name, "value": value,}
+                        {
+                            "name": header_name,
+                            "value": value,
+                        }
                     )
         # captured_rows_dict.append(
         #    {"name": c["column_name"], "value": match.groups()[0]}
@@ -164,6 +166,9 @@ class FixedWidthParser(Parser):
                 raise exceptions.TabulatorException(
                     f"The inferred header is of length {len(header_values)} but there are {len(width)} width values"
                 )
+            elif self.__infer:
+                self.__infer = False
+                width = [11] * len(header_values)
             # Yield the header value as the first row
             for captured_row in captured_rows:
                 header_values.append(captured_row["name"])
