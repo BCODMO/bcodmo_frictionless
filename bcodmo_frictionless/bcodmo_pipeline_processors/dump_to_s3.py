@@ -243,15 +243,15 @@ class S3Dumper(DumperBase):
     def hash_handler(tfile):
         tfile.seek(0)
         hasher = hashlib.md5()
-        data = "x"
+        data = tfile.read(1024)
         while len(data) > 0:
-            data = tfile.read(1024)
             if isinstance(data, str):
                 data = data.replace(WINDOWS_LINE_ENDING_STR, UNIX_LINE_ENDING_STR)
                 hasher.update(data.encode("utf8"))
             elif isinstance(data, bytes):
                 data = data.replace(WINDOWS_LINE_ENDING, UNIX_LINE_ENDING)
                 hasher.update(data)
+            data = tfile.read(1024)
         return hasher
 
 

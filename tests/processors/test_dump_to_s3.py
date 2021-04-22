@@ -62,6 +62,42 @@ def test_dump_s3():
 
 @mock_s3
 @pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_dump_s3_hash():
+    # create bucket and put objects
+    conn = boto3.client("s3")
+    conn.create_bucket(Bucket="testing_bucket")
+    conn.create_bucket(Bucket="testing_dump_bucket")
+    conn.upload_file("data/test.csv", "testing_bucket", "test.csv")
+
+    flows = [
+        load(
+            {
+                "from": "s3://testing_bucket/test.csv",
+                "name": "res",
+                "format": "csv",
+            }
+        ),
+        dump_to_s3(
+            {
+                "prefix": "test",
+                "force-format": True,
+                "format": "csv",
+                "save_pipeline_spec": True,
+                "temporal_format_property": "outputFormat",
+                "bucket_name": "testing_dump_bucket",
+                "data_manager": "test",
+            }
+        ),
+    ]
+
+    rows, datapackage, _ = Flow(*flows).results()
+    s3_resp = conn.head_object(Bucket="testing_dump_bucket", Key="test/res.csv")
+
+    assert s3_resp["ETag"].strip('"') == datapackage.resources[0].descriptor["hash"]
+
+
+@mock_s3
+@pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_dump_scientific_notation():
     # create bucket and put objects
     conn = boto3.client("s3")
