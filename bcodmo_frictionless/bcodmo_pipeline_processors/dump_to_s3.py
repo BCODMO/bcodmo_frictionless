@@ -83,7 +83,7 @@ class S3Dumper(DumperBase):
         self.forced_format = options.get("format", "csv")
         self.temporal_format_property = options.get("temporal_format_property", None)
         self.use_titles = options.get("use_titles", False)
-        self.submission_id = options.get("submission_id", False)
+        self.submission_id = options.get("submission_id", None)
 
         self.prefix = prefix
         self.bucket_name = bucket_name
