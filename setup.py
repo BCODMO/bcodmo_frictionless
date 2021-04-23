@@ -11,6 +11,7 @@ required = [
     "tableschema==1.16.4",
     "goodtables==2.5.0",
     "python-dateutil==2.8.0",
+    "xlrd==1.2.0",
 ]
 
 
