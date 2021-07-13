@@ -83,6 +83,24 @@ def test_load_xlsx_sheet_regex():
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_xlsx_sheet_regex_multiple():
+    flows = [
+        load(
+            {
+                "from": ["data/test.xlsx", "data/test.xlsx"],
+                "name": "res",
+                "format": "xlsx",
+                "sheet": "test\d",
+                "sheet_regex": True,
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert len(datapackage.resources) == 8
+    assert datapackage.resources[0].name == "res-1-test2"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_load_xlsx_sheet_range():
     flows = [
         load(

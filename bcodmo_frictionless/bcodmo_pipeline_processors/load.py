@@ -111,7 +111,8 @@ def load(_from, parameters):
             for r in package:
                 if r.res.name == name:
                     missing_data_values = r.res.descriptor.get("schema", {},).get(
-                        "missingValues", [],
+                        "missingValues",
+                        [],
                     )
 
                     yield process_resource(r, missing_data_values)
@@ -206,23 +207,22 @@ def load(_from, parameters):
             names = _name.split(_input_separator)
 
     # Get comma seperated file names/urls
+    sheet_regex = parameters.pop("sheet_regex", False)
+    sheet = parameters.pop("sheet", "")
+    sheet_separator = parameters.pop("sheet_separator", None)
     for i, url in enumerate(from_list):
         # Default the name to res[1-n]
         resource_name = names[i]
 
-        sheet_regex = parameters.pop("sheet_regex", False)
-        sheet = parameters.get("sheet", "")
         sheet_range = False
         if type(sheet) == str:
             sheet_range = re.match("\d-\d", sheet)
-        sheet_separator = parameters.pop("sheet_separator", None)
 
         if (
             sheet_regex
             or sheet_range
             or (sheet_separator and type(sheet) == str and sheet_separator in sheet)
         ):
-            sheet = parameters.pop("sheet", "")
             """
             Handling a regular expression sheet name
             """
@@ -315,12 +315,16 @@ def load(_from, parameters):
             if _remove_empty_rows:
                 params.append(remove_empty_rows(resource_name))
 
-    return Flow(*params,)
+    return Flow(
+        *params,
+    )
 
 
 def flow(parameters):
     _from = parameters.pop("from")
-    return Flow(load(_from, parameters),)
+    return Flow(
+        load(_from, parameters),
+    )
 
 
 if __name__ == "__main__":
