@@ -16,6 +16,8 @@ from six.moves.urllib.parse import urlparse
 from tabulator.helpers import requote_uri
 
 
+from .standard_load_multiple import standard_load_multiple
+
 # Import custom parsers here
 from bcodmo_frictionless.bcodmo_pipeline_processors.parsers import FixedWidthParser
 
@@ -84,9 +86,14 @@ def load(_from, parameters):
 
         return func
 
-    def mark_streaming(_from):
+    def mark_streaming(from_list):
         def func(package):
+            # import json
+            # print(json.dumps(package.pkg.descriptor, indent=4))
             for i in range(num_resources, len(package.pkg.resources)):
+                if len(from_list) <= i:
+                    continue
+                _from = from_list[i]
                 package.pkg.descriptor["resources"][i].setdefault(PROP_STREAMING, True)
                 package.pkg.descriptor["resources"][i].setdefault(
                     PROP_STREAMED_FROM, _from
@@ -96,7 +103,7 @@ def load(_from, parameters):
 
         return func
 
-    def remove_empty_rows(name):
+    def remove_empty_rows(names):
         def func(package):
             yield package.pkg
 
@@ -109,7 +116,7 @@ def load(_from, parameters):
                             break
 
             for r in package:
-                if r.res.name == name:
+                if r.res.name in names:
                     missing_data_values = r.res.descriptor.get("schema", {},).get(
                         "missingValues",
                         [],
@@ -210,6 +217,10 @@ def load(_from, parameters):
     sheet_regex = parameters.pop("sheet_regex", False)
     sheet = parameters.pop("sheet", "")
     sheet_separator = parameters.pop("sheet_separator", None)
+
+    resource_names = []
+    all_sheet_names = []
+    load_sources = []
     for i, url in enumerate(from_list):
         # Default the name to res[1-n]
         resource_name = names[i]
@@ -281,39 +292,33 @@ def load(_from, parameters):
                 if len(from_list) > 1 or _use_filename:
                     # If there are multiple urls being loaded, have the name take that into account
                     new_name = f"{resource_name}-{new_name}"
-                params.extend(
-                    [
-                        count_resources(),
-                        standard_load(
-                            url,
-                            custom_parsers=custom_parsers,
-                            name=new_name,
-                            sheet=sheet_name,
-                            **parameters,
-                        ),
-                        mark_streaming(url),
-                    ]
-                )
-                if _remove_empty_rows:
-                    params.append(remove_empty_rows(new_name))
+
+                load_sources.append(url)
+                resource_names.append(new_name)
+                all_sheet_names.append(sheet_name)
         else:
             if type(sheet) == int and _use_filename:
                 resource_name = f"{resource_name}-{sheet}"
 
-            params.extend(
-                [
-                    count_resources(),
-                    standard_load(
-                        url,
-                        custom_parsers=custom_parsers,
-                        name=resource_name,
-                        **parameters,
-                    ),
-                    mark_streaming(url),
-                ]
-            )
-            if _remove_empty_rows:
-                params.append(remove_empty_rows(resource_name))
+            load_sources.append(url)
+            resource_names.append(resource_name)
+            all_sheet_names.append(sheet)
+
+    params.extend(
+        [
+            count_resources(),
+            standard_load_multiple(
+                load_sources,
+                resource_names,
+                custom_parsers=custom_parsers,
+                sheets=all_sheet_names,
+                **parameters,
+            ),
+            # mark_streaming(from_list),
+        ]
+    )
+    if _remove_empty_rows:
+        params.append(remove_empty_rows(resource_names))
 
     return Flow(
         *params,
