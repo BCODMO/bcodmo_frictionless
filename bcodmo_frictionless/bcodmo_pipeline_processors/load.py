@@ -314,7 +314,7 @@ def load(_from, parameters):
                 sheets=all_sheet_names,
                 **parameters,
             ),
-            # mark_streaming(from_list),
+            mark_streaming(from_list),
         ]
     )
     if _remove_empty_rows:

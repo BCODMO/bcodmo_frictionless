@@ -53,7 +53,11 @@ def concatenator(resources, all_target_fields, field_mapping, include_source_nam
 
 
 def concatenate(
-    fields, target={}, resources=None, include_source_names=[], missing_values=[],
+    fields,
+    target={},
+    resources=None,
+    include_source_names=[],
+    missing_values=[],
 ):
     def func(package):
         matcher = ResourceMatcher(resources, package.pkg)
@@ -65,7 +69,10 @@ def concatenate(
         if "path" not in target:
             target["path"] = "data/" + target["name"] + ".csv"
         target.update(
-            dict(mediatype="text/csv", schema=dict(fields=[], primaryKey=[]),)
+            dict(
+                mediatype="text/csv",
+                schema=dict(fields=[], primaryKey=[]),
+            )
         )
 
         # Create mapping between source field names to target field names
@@ -118,7 +125,10 @@ def concatenate(
 
         for source in include_source_names:
             target["schema"]["fields"].append(
-                {"name": source["column_name"], "type": "string",}
+                {
+                    "name": source["column_name"],
+                    "type": "string",
+                }
             )
 
         # Update resources in datapackage (make sure they are consecutive)
@@ -141,7 +151,6 @@ def concatenate(
                     new_resources.append(resource)
             elif suffix:
                 if match:
-                    print("raising excpetion")
                     raise Exception(
                         "Concatenated resources must be appear in consecutive order in the datapackage"
                     )
@@ -167,7 +176,10 @@ def concatenate(
                     [resource], itertools.islice(it, num_concatenated - 1)
                 )
                 yield concatenator(
-                    resource_chain, needed_fields, field_mapping, include_source_names,
+                    resource_chain,
+                    needed_fields,
+                    field_mapping,
+                    include_source_names,
                 )
             else:
                 yield resource
@@ -196,7 +208,9 @@ def flow(parameters):
         ),
         update_resource(
             parameters.get("target", {}).get("name", "concat"),
-            **{PROP_STREAMING: True,},
+            **{
+                PROP_STREAMING: True,
+            },
         ),
     )
 
