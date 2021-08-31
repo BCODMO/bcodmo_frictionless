@@ -34,3 +34,29 @@ def test_concatenate():
     assert rows[0][0]["source_resource"] == "res_1"
     assert rows[0][0]["source_path"] == "data/test.csv"
     assert rows[0][0]["source_file"] == "test.csv"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_concatenate_missing_filenames():
+    flows = [
+        load({"from": "data/test.csv", "name": "res_1", "format": "csv"}),
+        load({"from": "data/test.csv", "name": "res_2", "format": "csv"}),
+        load({"from": "data/test.csv", "name": "res_3", "format": "csv"}),
+        concatenate(
+            {
+                "sources": ["res_1", "res_2", "res_3"],
+                "fields": {"col1": [], "col2": [], "col3": [], "col4": []},
+                "include_source_names": [
+                    {"type": "resource", "column_name": "source_resource"},
+                    {"type": "path", "column_name": "source_path"},
+                    {"type": "file", "column_name": "source_file"},
+                ],
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert len(datapackage.resources) == 1
+    assert len(datapackage.resources[0].schema.fields) == 7
+
+    assert rows[0][0]["source_file"] == "test.csv"
+    assert rows[0][-1]["source_file"] == "test.csv"

@@ -88,12 +88,11 @@ def load(_from, parameters):
 
     def mark_streaming(from_list):
         def func(package):
-            # import json
-            # print(json.dumps(package.pkg.descriptor, indent=4))
             for i in range(num_resources, len(package.pkg.resources)):
-                if len(from_list) <= i:
+                from_list_index = num_resources - i
+                if len(from_list) <= from_list_index:
                     continue
-                _from = from_list[i]
+                _from = from_list[from_list_index]
                 package.pkg.descriptor["resources"][i].setdefault(PROP_STREAMING, True)
                 package.pkg.descriptor["resources"][i].setdefault(
                     PROP_STREAMED_FROM, _from
