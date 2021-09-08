@@ -89,7 +89,7 @@ def load(_from, parameters):
     def mark_streaming(from_list):
         def func(package):
             for i in range(num_resources, len(package.pkg.resources)):
-                from_list_index = num_resources - i
+                from_list_index = i - num_resources
                 if len(from_list) <= from_list_index:
                     continue
                 _from = from_list[from_list_index]
