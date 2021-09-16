@@ -14,6 +14,12 @@ data = [
     {"col1": "nothere"},
 ]
 
+data2 = [
+    {"col1": "Abc"},
+    {"col1": "abc_def_hda"},
+    {"col1": "ABC_DEF_HDA"},
+]
+
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_find_replace():
@@ -22,7 +28,10 @@ def test_find_replace():
         find_replace(
             {
                 "fields": [
-                    {"name": "col1", "patterns": [{"find": "abc", "replace": "test"}],}
+                    {
+                        "name": "col1",
+                        "patterns": [{"find": "abc", "replace": "test"}],
+                    }
                 ]
             }
         ),
@@ -40,7 +49,10 @@ def test_find_replace_boolean():
         find_replace(
             {
                 "fields": [
-                    {"name": "col1", "patterns": [{"find": "abc", "replace": "test"}],}
+                    {
+                        "name": "col1",
+                        "patterns": [{"find": "abc", "replace": "test"}],
+                    }
                 ],
                 "boolean_statement": "{col1} != 'abc'",
             }
@@ -87,7 +99,10 @@ def test_find_replace_missing_value():
         find_replace(
             {
                 "fields": [
-                    {"name": "col1", "patterns": [{"find": "^.*$", "replace": "test"}],}
+                    {
+                        "name": "col1",
+                        "patterns": [{"find": "^.*$", "replace": "test"}],
+                    }
                 ]
             }
         ),
@@ -130,3 +145,69 @@ def test_find_replace_missing_value_allow():
     assert rows[0][0]["col1"] == "test"
     assert rows[0][1]["col1"] == "test"
     assert rows[0][2]["col1"] == "test"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_find_replace_uppercase():
+    flows = [
+        data2,
+        find_replace(
+            {
+                "fields": [
+                    {
+                        "name": "col1",
+                        "patterns": [
+                            {"find": "(Abc)", "replace_function": "uppercase"}
+                        ],
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert rows[0][0]["col1"] == "ABC"
+
+    flows = [
+        data2,
+        find_replace(
+            {
+                "fields": [
+                    {
+                        "name": "col1",
+                        "patterns": [
+                            {
+                                "find": ".(..)_(...)_.(.).",
+                                "replace_function": "uppercase",
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert rows[0][1]["col1"] == "aBC_DEF_hDa"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_find_replace_lowercase():
+    flows = [
+        data2,
+        find_replace(
+            {
+                "fields": [
+                    {
+                        "name": "col1",
+                        "patterns": [
+                            {
+                                "find": ".(..)_(...)_.(.).",
+                                "replace_function": "lowercase",
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert rows[0][2]["col1"] == "Abc_def_HdA"

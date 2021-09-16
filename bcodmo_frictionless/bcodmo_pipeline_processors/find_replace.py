@@ -14,6 +14,35 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.boolean_processor_helper imp
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import get_missing_values
 
 
+def _apply_function(function):
+    def _func(m):
+        final_string = ""
+        prev_end_index = 0
+        for group_num, group in enumerate(m.groups(), start=1):
+            cur_start_index = m.start(group_num)
+
+            # Add what happened between before this match and this match
+            final_string += m.group()[prev_end_index:cur_start_index]
+
+            cur_end_index = m.end(group_num)
+
+            # Add this group, uppercase
+            if function == "uppercase":
+                final_string += m.group()[cur_start_index:cur_end_index].upper()
+            elif function == "lowercase":
+                final_string += m.group()[cur_start_index:cur_end_index].lower()
+            else:
+                raise Exception("Function was not uppercase or lowercase")
+
+            prev_end_index = cur_end_index
+        # Add the rest of the string
+        final_string += m.group()[prev_end_index:]
+
+        return final_string
+
+    return _func
+
+
 def _find_replace(rows, fields, missing_values, boolean_statement=None):
     expression = get_expression(boolean_statement)
 
@@ -28,6 +57,7 @@ def _find_replace(rows, fields, missing_values, boolean_statement=None):
                 for pattern in field.get("patterns", []):
                     name = field.get("name", None)
                     find = pattern.get("find", None)
+                    replace_function = pattern.get("replace_function", "string")
                     replace = pattern.get("replace", None)
                     replace_missing_values = pattern.get(
                         "replace_missing_values", False
@@ -40,9 +70,14 @@ def _find_replace(rows, fields, missing_values, boolean_statement=None):
                         raise Exception(
                             'The "find" parameter is required for the find_replace processor'
                         )
-                    if replace == None:
+                    if replace_function not in ["string", "uppercase", "lowercase"]:
                         raise Exception(
-                            'The "replace" parameter is required for the find_replace processor'
+                            'The "replace_function" parameter must be one of string, uppercase, or lowercase'
+                        )
+
+                    if replace_function == "string" and replace == None:
+                        raise Exception(
+                            'The "replace" parameter is required for the find_replace processor if "replace_function" is string'
                         )
                     val = new_row.get(name, None)
                     if (
@@ -50,7 +85,18 @@ def _find_replace(rows, fields, missing_values, boolean_statement=None):
                     ) or replace_missing_values:
                         if replace_missing_values and val is None:
                             val = ""
-                        new_row[name] = re.sub(str(find), str(replace), str(val),)
+                        if replace_function == "string":
+                            new_row[name] = re.sub(
+                                str(find),
+                                str(replace),
+                                str(val),
+                            )
+                        else:
+                            new_row[name] = re.sub(
+                                str(find),
+                                _apply_function(replace_function),
+                                str(val),
+                            )
         yield new_row
 
 
