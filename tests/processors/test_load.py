@@ -549,3 +549,63 @@ def test_load_s3_path_xlsx_regex_object_spaces():
     rows, datapackage, _ = Flow(*flows).results()
     assert len(datapackage.resources) == 4
     assert datapackage.resources[0].name == "test2"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_regex_csv():
+    flows = [
+        load(
+            {
+                "from": "data/test_regex.csv",
+                "name": "res",
+                "format": "bcodmo-regex-csv",
+                "skip_rows": ["#", "*"],
+                "delimiter": "\s+",
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    print(rows)
+
+    assert len(datapackage.resources[0].schema.fields) == 4
+
+    assert len(rows) == 1
+    assert rows[0][0] == {
+        "col1": "abc",
+        "col2": 1,
+        "col3": Decimal("1.532"),
+        "col4": "12/29/19",
+    }
+    assert rows[0][1] == {
+        "col1": "abc",
+        "col2": 2,
+        "col3": Decimal("35.131"),
+        "col4": "12/30/19",
+    }
+    assert rows[0][2] == {
+        "col1": "def",
+        "col2": 1,
+        "col3": Decimal("53.1"),
+        "col4": "12/31/19",
+    }
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_regex_csv_capture_skipped_rows():
+    flows = [
+        load(
+            {
+                "from": "data/test_regex.csv",
+                "name": "res",
+                "format": "bcodmo-regex-csv",
+                "delimiter": "\s+",
+                "skip_rows": ["#", "*"],
+                "capture_skipped_rows": [
+                    {"column_name": "test1", "regex": "\*\* (.*)"}
+                ],
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert "test1" in rows[0][0]
+    assert rows[0][0]["test1"] == "Testing match multiple;another match;again"

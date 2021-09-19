@@ -19,12 +19,16 @@ from tabulator.helpers import requote_uri
 from .standard_load_multiple import standard_load_multiple
 
 # Import custom parsers here
-from bcodmo_frictionless.bcodmo_pipeline_processors.parsers import FixedWidthParser
+from bcodmo_frictionless.bcodmo_pipeline_processors.parsers import (
+    FixedWidthParser,
+    RegexCSVParser,
+)
 
 # Add custom parsers here
 # Custom parsers should NOT have periods in their name
 custom_parsers = {
     "bcodmo-fixedwidth": FixedWidthParser,
+    "bcodmo-regex-csv": RegexCSVParser,
 }
 
 
