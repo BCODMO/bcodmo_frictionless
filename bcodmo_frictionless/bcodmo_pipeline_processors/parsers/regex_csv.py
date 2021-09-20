@@ -20,7 +20,13 @@ import re
 class RegexCSVParser(Parser):
     """Parser to parse regex-delimited CSV data format."""
 
-    options = ["delimiter", "capture_skipped_rows", "capture_skipped_rows_join"]
+    options = [
+        "stream",
+        "delimiter",
+        "capture_skipped_rows",
+        "capture_skipped_rows_join_string",
+        "capture_skipped_rows_join",
+    ]
 
     def __init__(self, loader, force_parse=False, **options):
         # Make bytes
@@ -34,7 +40,12 @@ class RegexCSVParser(Parser):
         self.__stream = options.get("stream", None)
         self.__delimiter = options.get("delimiter", ",")
         self.__capture_skipped_rows = options.get("capture_skipped_rows", None)
-        self.__capture_skipped_rows_join = options.get("capture_skipped_rows_join", ";")
+        self.__capture_skipped_rows_join = options.get(
+            "capture_skipped_rows_join", True
+        )
+        self.__capture_skipped_rows_join_string = options.get(
+            "capture_skipped_rows_join_string", ";"
+        )
         self.__force_parse = force_parse
         self.__chars = None
 
@@ -75,6 +86,8 @@ class RegexCSVParser(Parser):
                 for c in self.__capture_skipped_rows:
                     match = re.match(c["regex"], item)
                     if match:
+                        if not len(match.groups()):
+                            continue
                         column_name = c["column_name"]
                         if column_name not in captured_rows_dict:
                             captured_rows_dict[column_name] = []
@@ -87,19 +100,33 @@ class RegexCSVParser(Parser):
                     break
         captured_rows = []
         for header_name, v in captured_rows_dict.items():
-            captured_rows.append(
-                {
-                    "name": header_name,
-                    "value": self.__capture_skipped_rows_join.join(v),
-                }
-            )
+            if self.__capture_skipped_rows_join:
+                captured_rows.append(
+                    {
+                        "name": header_name,
+                        "value": self.__capture_skipped_rows_join_string.join(v),
+                    }
+                )
+            else:
+                for value in v:
+                    captured_rows.append(
+                        {
+                            "name": header_name,
+                            "value": value,
+                        }
+                    )
         # For PY2 encode/decode
         if six.PY2:
             # Reader requires utf-8 encoded stream
             bytes = iterencode(self.__chars, "utf-8")
 
             reader = pd.read_csv(
-                bytes, sep=self.__delimiter, engine="python", chunksize=2, header=None
+                bytes,
+                sep=self.__delimiter,
+                engine="python",
+                chunksize=2,
+                header=None,
+                dtype=str,
             )
             index_offset = 0
             for chunk in reader:
@@ -122,6 +149,7 @@ class RegexCSVParser(Parser):
                 engine="python",
                 chunksize=2,
                 header=None,
+                dtype=str,
             )
             index_offset = 0
             for chunk in reader:

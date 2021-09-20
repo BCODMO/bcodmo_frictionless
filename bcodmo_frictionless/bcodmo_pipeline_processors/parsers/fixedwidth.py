@@ -122,6 +122,8 @@ class FixedWidthParser(Parser):
                 for c in self.__seabird_capture_skipped_rows:
                     match = re.match(c["regex"], item)
                     if match:
+                        if not len(match.groups()):
+                            continue
                         column_name = c["column_name"]
                         if column_name not in captured_rows_dict:
                             captured_rows_dict[column_name] = []

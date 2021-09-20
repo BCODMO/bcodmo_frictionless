@@ -183,7 +183,7 @@ def test_load_path_pattern():
         )
     ]
     rows, datapackage, _ = Flow(*flows).results()
-    assert len(datapackage.resources) == 1
+    assert len(datapackage.resources) == 2
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
@@ -603,6 +603,7 @@ def test_load_regex_csv_capture_skipped_rows():
                 "capture_skipped_rows": [
                     {"column_name": "test1", "regex": "\*\* (.*)"}
                 ],
+                "capture_skipped_rows_join": True,
             }
         )
     ]
