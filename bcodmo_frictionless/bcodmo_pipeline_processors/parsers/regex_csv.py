@@ -127,6 +127,7 @@ class RegexCSVParser(Parser):
                 chunksize=2,
                 header=None,
                 dtype=str,
+                index_col=False,
             )
             index_offset = 0
             for chunk in reader:
@@ -150,6 +151,7 @@ class RegexCSVParser(Parser):
                 chunksize=2,
                 header=None,
                 dtype=str,
+                index_col=False,
             )
             index_offset = 0
             for chunk in reader:
