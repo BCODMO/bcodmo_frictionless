@@ -77,12 +77,23 @@ class RegexCSVParser(Parser):
     def extended_rows(self):
         return self.__extended_rows
 
+    def _is_data_row(self, row, row_number):
+        headers_row = self.__stream._Stream__headers_row or 1
+        return not self.__stream._Stream__check_if_row_for_skipping(
+            row_number, None, row
+        ) and (headers_row < row_number)
+
     def __iter_extended_rows(self):
 
+        headers_row = self.__stream._Stream__headers_row or 1
+        print("HEADERS ROW IS", headers_row)
         items = self.__chars
         captured_rows_dict = {}
         if self.__capture_skipped_rows:
             for row_number, item in enumerate(iter(items.readline, "")):
+                # If we're not in a comment anymore (as long as we are past the header row)
+                if self._is_data_row([item], row_number + 1):
+                    break
                 for c in self.__capture_skipped_rows:
                     match = re.match(c["regex"], item)
                     if match:
@@ -93,11 +104,8 @@ class RegexCSVParser(Parser):
                             captured_rows_dict[column_name] = []
                         captured_rows_dict[column_name].append(match.groups()[0])
 
-                # If we're not in a comment anymore
-                if not self.__stream._Stream__check_if_row_for_skipping(
-                    row_number, None, [item]
-                ):
-                    break
+        items.seek(0)
+        print(captured_rows_dict)
         captured_rows = []
         for header_name, v in captured_rows_dict.items():
             if self.__capture_skipped_rows_join:
@@ -118,7 +126,7 @@ class RegexCSVParser(Parser):
         # For PY2 encode/decode
         if six.PY2:
             # Reader requires utf-8 encoded stream
-            bytes = iterencode(self.__chars, "utf-8")
+            bytes = iterencode(items, "utf-8")
 
             reader = pd.read_csv(
                 bytes,
@@ -136,7 +144,8 @@ class RegexCSVParser(Parser):
                     l = row.tolist()
                     l = [str(item) for item in l]
                     for captured_row in captured_rows:
-                        if actual_index == 1:
+                        # Append the name if it's not a data row (either header or to be skipped)
+                        if not self._is_data_row(l, actual_index):
                             l.append(captured_row["name"])
                         else:
                             l.append(captured_row["value"])
@@ -145,7 +154,7 @@ class RegexCSVParser(Parser):
         # For PY3 use chars
         else:
             reader = pd.read_csv(
-                self.__chars,
+                items,
                 sep=self.__delimiter,
                 engine="python",
                 chunksize=2,
@@ -160,8 +169,10 @@ class RegexCSVParser(Parser):
                     l = row.tolist()
                     l = [str(item) for item in l]
                     for captured_row in captured_rows:
-                        if actual_index == 1:
+                        # Append the name if it's not a data row (either header or to be skipped)
+                        if not self._is_data_row(l, actual_index):
                             l.append(captured_row["name"])
                         else:
                             l.append(captured_row["value"])
+                    print("yielding", actual_index, l)
                     yield (actual_index, None, l)
