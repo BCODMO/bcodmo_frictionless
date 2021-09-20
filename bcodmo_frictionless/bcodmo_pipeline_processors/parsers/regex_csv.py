@@ -86,7 +86,6 @@ class RegexCSVParser(Parser):
     def __iter_extended_rows(self):
 
         headers_row = self.__stream._Stream__headers_row or 1
-        print("HEADERS ROW IS", headers_row)
         items = self.__chars
         captured_rows_dict = {}
         if self.__capture_skipped_rows:
@@ -105,7 +104,6 @@ class RegexCSVParser(Parser):
                         captured_rows_dict[column_name].append(match.groups()[0])
 
         items.seek(0)
-        print(captured_rows_dict)
         captured_rows = []
         for header_name, v in captured_rows_dict.items():
             if self.__capture_skipped_rows_join:
@@ -174,5 +172,4 @@ class RegexCSVParser(Parser):
                             l.append(captured_row["name"])
                         else:
                             l.append(captured_row["value"])
-                    print("yielding", actual_index, l)
                     yield (actual_index, None, l)
