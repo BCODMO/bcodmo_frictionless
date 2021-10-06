@@ -610,3 +610,39 @@ def test_load_regex_csv_capture_skipped_rows():
     rows, datapackage, _ = Flow(*flows).results()
     assert "test1" in rows[0][0]
     assert rows[0][0]["test1"] == "Testing match multiple;another match;again"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_regex_csv_capture_skipped_rows_column_name_bug():
+    flows = [
+        load(
+            {
+                # "from": ["data/test_regex2.txt"],
+                "from": [
+                    "s3://laminar-load/data305/test/I07N_CTD_WOCE/i07nct/i07n_0711.wct"
+                ],
+                "infer_strategy": "strings",
+                "cast_strategy": "strings",
+                "override_schema": {"missingValues": ["", "nd"]},
+                "input_separator": ",",
+                "name": "i07nct",
+                "limit_rows": 40,
+                "name": "res",
+                "format": "bcodmo-regex-csv",
+                "delimiter": "\s+",
+                "skip_rows": [{"value": "\*{6}.*", "type": "regex"}],
+                "capture_skipped_rows": [
+                    {"column_name": "EXPOCODE", "regex": "EXPOCODE\s+(.*)\s+WHP.*"}
+                ],
+                "headers": [4, 5],
+                "ignore_blank_headers": False,
+                "capture_skipped_rows_join": False,
+                "remove_empty_rows": True,
+                "input_path_pattern": True,
+                "s3_endpoint_url": "https://s3.amazonaws.com",
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert "EXPOCODE" in rows[0][0]
+    assert rows[0][0]["EXPOCODE"] == "316N145_10"
