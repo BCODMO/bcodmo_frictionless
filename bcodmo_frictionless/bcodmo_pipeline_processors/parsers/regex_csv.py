@@ -79,9 +79,10 @@ class RegexCSVParser(Parser):
 
     def _is_data_row(self, row, row_number):
         headers_row = self.__stream._Stream__headers_row or 1
+        headers_row_last = self.__stream._Stream__headers_row_last or 1
         return not self.__stream._Stream__check_if_row_for_skipping(
             row_number, None, row
-        ) and (headers_row < row_number)
+        ) and (headers_row_last < row_number)
 
     def __iter_extended_rows(self):
 
