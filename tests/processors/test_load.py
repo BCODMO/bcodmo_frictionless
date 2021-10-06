@@ -609,7 +609,8 @@ def test_load_regex_csv_capture_skipped_rows():
     ]
     rows, datapackage, _ = Flow(*flows).results()
     assert "test1" in rows[0][0]
-    assert rows[0][0]["test1"] == "Testing match multiple;another match;again"
+    assert len(rows[0][0]) == 5
+    assert rows[0][0]["test1"] == "Testing match;another match multiple;again"
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
@@ -633,4 +634,5 @@ def test_load_regex_csv_capture_skipped_rows_column_name_bug():
     ]
     rows, datapackage, _ = Flow(*flows).results()
     assert "EXPOCODE" in rows[0][0]
+    assert len(rows[0][0]) == 7
     assert rows[0][0]["EXPOCODE"] == "316N145_10"

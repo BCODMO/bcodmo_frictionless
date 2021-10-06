@@ -10,7 +10,6 @@ from itertools import chain
 from codecs import iterencode
 from tabulator.parser import Parser
 from tabulator import helpers
-import pandas as pd
 import re
 
 
@@ -122,55 +121,14 @@ class RegexCSVParser(Parser):
                             "value": value,
                         }
                     )
-        # For PY2 encode/decode
-        if six.PY2:
-            # Reader requires utf-8 encoded stream
-            bytes = iterencode(items, "utf-8")
 
-            reader = pd.read_csv(
-                bytes,
-                sep=self.__delimiter,
-                engine="python",
-                chunksize=2,
-                header=None,
-                dtype=str,
-                index_col=False,
-            )
-            index_offset = 0
-            for chunk in reader:
-                for index, row in chunk.iterrows():
-                    actual_index = index + 1 + index_offset
-                    l = row.tolist()
-                    l = [str(item) for item in l]
-                    for captured_row in captured_rows:
-                        # Append the name if it's not a data row (either header or to be skipped)
-                        if not self._is_data_row(l, actual_index):
-                            l.append(captured_row["name"])
-                        else:
-                            l.append(captured_row["value"])
-                    yield (actual_index, None, l)
-
-        # For PY3 use chars
-        else:
-            reader = pd.read_csv(
-                items,
-                sep=self.__delimiter,
-                engine="python",
-                chunksize=2,
-                header=None,
-                dtype=str,
-                index_col=False,
-            )
-            index_offset = 0
-            for chunk in reader:
-                for index, row in chunk.iterrows():
-                    actual_index = index + 1 + index_offset
-                    l = row.tolist()
-                    l = [str(item) for item in l]
-                    for captured_row in captured_rows:
-                        # Append the name if it's not a data row (either header or to be skipped)
-                        if not self._is_data_row(l, actual_index):
-                            l.append(captured_row["name"])
-                        else:
-                            l.append(captured_row["value"])
-                    yield (actual_index, None, l)
+        for i, item in enumerate(iter(items.readline, "")):
+            row_number = i + 1
+            l = [x for x in re.split(self.__delimiter, item) if x is not ""]
+            for captured_row in captured_rows:
+                # Append the name if it's not a data row (either header or to be skipped)
+                if not self._is_data_row(l, row_number):
+                    l.append(captured_row["name"])
+                else:
+                    l.append(captured_row["value"])
+            yield (row_number, None, l)
