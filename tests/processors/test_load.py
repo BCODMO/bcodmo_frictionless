@@ -634,5 +634,6 @@ def test_load_regex_csv_capture_skipped_rows_column_name_bug():
     ]
     rows, datapackage, _ = Flow(*flows).results()
     assert "EXPOCODE" in rows[0][0]
+    assert "QUALT1" in rows[0][0]
     assert len(rows[0][0]) == 7
     assert rows[0][0]["EXPOCODE"] == "316N145_10"

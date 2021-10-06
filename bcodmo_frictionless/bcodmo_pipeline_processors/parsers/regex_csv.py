@@ -77,11 +77,14 @@ class RegexCSVParser(Parser):
         return self.__extended_rows
 
     def _is_data_row(self, row, row_number):
-        headers_row = self.__stream._Stream__headers_row or 1
         headers_row_last = self.__stream._Stream__headers_row_last or 1
         return not self.__stream._Stream__check_if_row_for_skipping(
             row_number, None, row
         ) and (headers_row_last < row_number)
+
+    def _is_first_header_row(self, row, row_number):
+        headers_row = self.__stream._Stream__headers_row or 1
+        return headers_row == row_number
 
     def __iter_extended_rows(self):
 
@@ -128,7 +131,8 @@ class RegexCSVParser(Parser):
             for captured_row in captured_rows:
                 # Append the name if it's not a data row (either header or to be skipped)
                 if not self._is_data_row(l, row_number):
-                    l.append(captured_row["name"])
+                    if self._is_first_header_row(l, row_number):
+                        l.append(captured_row["name"])
                 else:
                     l.append(captured_row["value"])
             yield (row_number, None, l)
