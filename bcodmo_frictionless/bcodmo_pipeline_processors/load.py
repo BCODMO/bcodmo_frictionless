@@ -39,16 +39,23 @@ def get_s3():
     load_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY", None)
     load_endpoint_url = os.environ.get("LAMINAR_S3_HOST", None)
 
-    if load_access_key and load_secret_access_key and load_endpoint_url:
+    try:
+        if load_access_key and load_secret_access_key and load_endpoint_url:
+            return boto3.resource(
+                "s3",
+                aws_access_key_id=load_access_key,
+                aws_secret_access_key=load_secret_access_key,
+                endpoint_url=load_endpoint_url,
+            )
         return boto3.resource(
             "s3",
-            aws_access_key_id=load_access_key,
-            aws_secret_access_key=load_secret_access_key,
             endpoint_url=load_endpoint_url,
         )
-    raise Exception(
-        "The credentials for the S3 load bucket are not set up properly on this machine"
-    )
+    except Exception as e:
+        raise Exception(
+            "The credentials for the S3 load bucket are not set up properly on this machine: ",
+            e,
+        )
 
 
 def clean_resource_name(name):
