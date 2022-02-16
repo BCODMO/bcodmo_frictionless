@@ -190,39 +190,54 @@ class S3Dumper(DumperBase):
         super(S3Dumper, self).handle_datapackage()
 
     def rows_processor(self, resource, writer, stream):
-        for row in resource:
-            writer.write_row(row)
-            yield row
-        writer.finalize_file()
+        row_number = None
+        try:
+            row_number = 0
+            for row in resource:
+                row_number += 1
+                writer.write_row(row)
+                yield row
+            row_number = None
+            writer.finalize_file()
 
-        # Get resource descriptor
-        resource_descriptor = resource.res.descriptor
-        for descriptor in self.datapackage.descriptor["resources"]:
-            if descriptor["name"] == resource.res.descriptor["name"]:
-                resource_descriptor = descriptor
+            # Get resource descriptor
+            resource_descriptor = resource.res.descriptor
+            for descriptor in self.datapackage.descriptor["resources"]:
+                if descriptor["name"] == resource.res.descriptor["name"]:
+                    resource_descriptor = descriptor
 
-        # File Hash:
-        if self.resource_hash:
-            hasher = S3Dumper.hash_handler(stream)
-            # Update path with hash
-            if self.add_filehash_to_path:
-                DumperBase.insert_hash_in_path(resource_descriptor, hasher.hexdigest())
-            DumperBase.set_attr(
-                resource_descriptor, self.resource_hash, hasher.hexdigest()
+            # File Hash:
+            if self.resource_hash:
+                hasher = S3Dumper.hash_handler(stream)
+                # Update path with hash
+                if self.add_filehash_to_path:
+                    DumperBase.insert_hash_in_path(
+                        resource_descriptor, hasher.hexdigest()
+                    )
+                DumperBase.set_attr(
+                    resource_descriptor, self.resource_hash, hasher.hexdigest()
+                )
+
+            # Finalise
+            stream.seek(0)
+            _, filesize = self.write_file_to_output(
+                stream.read().encode(), resource.res.source, "text/csv"
             )
+            stream.close()
 
-        # Finalise
-        stream.seek(0)
-        _, filesize = self.write_file_to_output(
-            stream.read().encode(), resource.res.source, "text/csv"
-        )
-        stream.close()
+            # Update filesize
+            DumperBase.inc_attr(
+                self.datapackage.descriptor, self.datapackage_bytes, filesize
+            )
+            DumperBase.inc_attr(resource_descriptor, self.resource_bytes, filesize)
+        except Exception as e:
+            row_number_text = ""
+            if row_number is not None:
+                row_number_text = f" - occured at line # {row_number}"
 
-        # Update filesize
-        DumperBase.inc_attr(
-            self.datapackage.descriptor, self.datapackage_bytes, filesize
-        )
-        DumperBase.inc_attr(resource_descriptor, self.resource_bytes, filesize)
+            raise type(e)(
+                f"{str(e)} - occured at resource {resource.res.descriptor['name']}{row_number_text}"
+            ) from e
 
     def process_resource(self, resource):
         if resource.res.name in self.file_formatters:
