@@ -233,11 +233,14 @@ class S3Dumper(DumperBase):
         except Exception as e:
             row_number_text = ""
             if row_number is not None:
-                row_number_text = f" - occured at line # {row_number}"
+                row_number_text = f" - occured at line # {row_number + 1}"
 
-            raise type(e)(
-                f"{str(e)} - occured at resource {resource.res.descriptor['name']}{row_number_text}"
-            ) from e
+            if len(e.args) >= 1:
+                e.args = (
+                    e.args[0]
+                    + f"\n\nOccured at resource {resource.res.descriptor['name']}{row_number_text}",
+                ) + e.args[1:]
+            raise e
 
     def process_resource(self, resource):
         if resource.res.name in self.file_formatters:
