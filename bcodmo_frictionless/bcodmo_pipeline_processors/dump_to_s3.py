@@ -84,6 +84,7 @@ class S3Dumper(DumperBase):
         self.temporal_format_property = options.get("temporal_format_property", None)
         self.use_titles = options.get("use_titles", False)
         self.submission_id = options.get("submission_id", None)
+        self.submission_ids = options.get("submission_ids", [])
 
         self.prefix = prefix
         self.bucket_name = bucket_name
@@ -129,7 +130,10 @@ class S3Dumper(DumperBase):
         if "bcodmo:" not in datapackage.descriptor:
             datapackage.descriptor["bcodmo:"] = {}
         datapackage.descriptor["bcodmo:"]["dataManager"] = self.data_manager
-        datapackage.descriptor["bcodmo:"]["submissionId"] = self.submission_id
+        if self.submission_id:
+            datapackage.descriptor["bcodmo:"]["submissionId"] = self.submission_id
+        datapackage.descriptor["bcodmo:"]["submissionIds"] = self.submission_ids
+
         return datapackage
 
     def write_file_to_output(self, contents, path, content_type):
