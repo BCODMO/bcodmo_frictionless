@@ -22,6 +22,7 @@ class NonStandardCharacter(object):
                 continue
             # Check constraint
             message = None
+            whitespace = False
             value = cell["value"]
             if value and (
                 (not hasattr(field, "missingvalue"))
@@ -31,10 +32,16 @@ class NonStandardCharacter(object):
                     v = ord(c)
                     if v > 128:
                         message = f"Non standard character {v} found"
+                        if v == 133 or v == 160:
+                            whitespace = True
+                            message = f"Non standard whitespace character {v} found. Try finding and replacing all whitespace characters with \s+"
+                        break
 
             if message:
                 error = Error(
-                    "non-standard-character",
+                    "non-standard-whitespace-character"
+                    if whitespace
+                    else "non-standard-character",
                     row_number=row_number,
                     message=message,
                     cell=cell,
