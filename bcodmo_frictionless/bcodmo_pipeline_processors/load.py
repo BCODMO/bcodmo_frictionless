@@ -24,11 +24,20 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.parsers import (
     RegexCSVParser,
 )
 
+from bcodmo_frictionless.bcodmo_pipeline_processors.loaders import (
+    DynamoDBLoader,
+)
+
+
 # Add custom parsers here
 # Custom parsers should NOT have periods in their name
 custom_parsers = {
     "bcodmo-fixedwidth": FixedWidthParser,
     "bcodmo-regex-csv": RegexCSVParser,
+}
+
+custom_loaders = {
+    "bcodmo-dynamodb": DynamoDBLoader,
 }
 
 
@@ -77,6 +86,13 @@ def load(_from, parameters):
         parameters["fixedwidth_skip_header"] = [
             v for v in parameters.get("skip_rows", []) if type(v) == str
         ]
+    elif parameters.get("format") == "csv" and False:
+        parameters["scheme"] = "bcodmo-dynamodb"
+        parameters["ddb_load_table"] = os.environ.get("DDB_LOAD_TABLE")
+        parameters["ddb_load_last_used_table"] = os.environ.get(
+            "DDB_LOAD_LAST_USED_TABLE"
+        )
+        parameters["ddb_endpoint_url"] = os.environ.get("DDB_ENDPOINT")
 
     if parameters.get("parse_seabird_header"):
         """
@@ -321,6 +337,7 @@ def load(_from, parameters):
                 load_sources,
                 resource_names,
                 custom_parsers=custom_parsers,
+                custom_loaders=custom_loaders,
                 sheets=all_sheet_names,
                 **parameters,
             ),

@@ -18,4 +18,5 @@ from .rename_resource import flow as rename_resource
 from .string_format import flow as string_format
 from .extract_nonnumeric import flow as extract_nonnumeric
 from .dump_to_s3 import flow as dump_to_s3
+from .dump_to_ddb import flow as dump_to_ddb
 from .set_types import flow as set_types

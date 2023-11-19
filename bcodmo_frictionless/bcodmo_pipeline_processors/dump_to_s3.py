@@ -1,6 +1,7 @@
 import os
 import json
 import io
+import time
 import logging
 import boto3
 import tempfile
@@ -144,8 +145,11 @@ class S3Dumper(DumperBase):
         obj_name = os.path.join(self.prefix, path)
         contents = contents.replace(WINDOWS_LINE_ENDING, UNIX_LINE_ENDING)
 
+        start = time.time()
+        print(f"Starting save file {time.time()}")
         obj = self.s3.Object(self.bucket_name, obj_name)
         obj.put(Body=contents, ContentType=content_type)
+        print(f"Took {time.time() - start} to save the file ({path})")
 
         return path, len(contents)
 
@@ -195,14 +199,24 @@ class S3Dumper(DumperBase):
 
     def rows_processor(self, resource, writer, stream):
         row_number = None
+        print(f"Received at {time.time()}")
+        start1 = time.time()
+
         try:
             row_number = 0
+            start = time.time()
             for row in resource:
                 row_number += 1
+                # if row_number < 200:
                 writer.write_row(row)
+                if row_number % 10000 == 0:
+                    print(f"Finished {row_number}")
                 yield row
             row_number = None
             writer.finalize_file()
+            print(
+                f"Finished going through loop at {time.time()}, in {time.time() - start1}"
+            )
 
             # Get resource descriptor
             resource_descriptor = resource.res.descriptor
@@ -221,6 +235,7 @@ class S3Dumper(DumperBase):
                 DumperBase.set_attr(
                     resource_descriptor, self.resource_hash, hasher.hexdigest()
                 )
+            print(f"After hash, starting to write file at {time.time()}")
 
             # Finalise
             stream.seek(0)
