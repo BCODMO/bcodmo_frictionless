@@ -9,6 +9,12 @@ from dataflows.helpers.resource_matcher import ResourceMatcher
 from datapackage_pipelines.wrapper import ingest
 from datapackage_pipelines.utilities.resources import PROP_STREAMING
 from datapackage_pipelines.utilities.flow_utils import spew_flow
+from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
+    get_redis_progress_key,
+    get_redis_connection,
+    get_redis_progress_resource_key,
+    REDIS_PROGRESS_DELETED_FLAG,
+)
 
 
 def concatenator(resources, all_target_fields, field_mapping, include_source_names):
@@ -58,6 +64,7 @@ def concatenate(
     resources=None,
     include_source_names=[],
     missing_values=[],
+    cache_id=None,
 ):
     def func(package):
         matcher = ResourceMatcher(resources, package.pkg)
@@ -134,6 +141,9 @@ def concatenate(
         # Update resources in datapackage (make sure they are consecutive)
         prefix = True
         suffix = False
+        redis_conn = None
+        if cache_id is not None:
+            redis_conn = get_redis_connection()
         num_concatenated = 0
         new_resources = []
         for resource in package.pkg.descriptor["resources"]:
@@ -147,6 +157,10 @@ def concatenate(
                 if match:
                     prefix = False
                     num_concatenated += 1
+                    if redis_conn is not None:
+                        progress_key = get_redis_progress_key(name, cache_id)
+                        redis_conn.set(progress_key, REDIS_PROGRESS_DELETED_FLAG)
+
                 else:
                     new_resources.append(resource)
             elif suffix:
@@ -162,9 +176,18 @@ def concatenate(
                     new_resources.append(resource)
                 else:
                     num_concatenated += 1
+                    if redis_conn is not None:
+                        progress_key = get_redis_progress_key(name, cache_id)
+                        redis_conn.set(progress_key, REDIS_PROGRESS_DELETED_FLAG)
+
         if not suffix:
             new_resources.append(target)
 
+        if redis_conn is not None:
+            redis_conn.sadd(
+                get_redis_progress_resource_key(_cache_id),
+                target["name"],
+            )
         package.pkg.descriptor["resources"] = new_resources
         yield package.pkg
 
@@ -205,6 +228,7 @@ def flow(parameters):
             parameters.get("sources"),
             include_source_names,
             parameters.get("missing_values", []),
+            parameters.get("cache_id", None),
         ),
         update_resource(
             parameters.get("target", {}).get("name", "concat"),

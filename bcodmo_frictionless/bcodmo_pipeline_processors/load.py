@@ -17,6 +17,12 @@ from tabulator.helpers import requote_uri
 
 
 from .standard_load_multiple import standard_load_multiple
+from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
+    get_redis_progress_key,
+    get_redis_progress_resource_key,
+    get_redis_connection,
+    REDIS_PROGRESS_INIT_FLAG,
+)
 
 # Import custom parsers here
 from bcodmo_frictionless.bcodmo_pipeline_processors.parsers import (
@@ -24,8 +30,9 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.parsers import (
     RegexCSVParser,
 )
 
+# Import custom loaders here
 from bcodmo_frictionless.bcodmo_pipeline_processors.loaders import (
-    DynamoDBLoader,
+    BcodmoAWS,
 )
 
 
@@ -37,7 +44,7 @@ custom_parsers = {
 }
 
 custom_loaders = {
-    "bcodmo-dynamodb": DynamoDBLoader,
+    "bcodmo-aws": BcodmoAWS,
 }
 
 
@@ -75,6 +82,10 @@ def load(_from, parameters):
     _input_separator = parameters.pop("input_separator", ",")
     _remove_empty_rows = parameters.pop("remove_empty_rows", True)
     _recursion_limit = parameters.pop("recursion_limit", False)
+    _cache_id = parameters.pop("cache_id", None)
+
+    if _cache_id:
+        parameters["scheme"] = "bcodmo-aws"
 
     if _recursion_limit:
         sys.setrecursionlimit(_recursion_limit)
@@ -86,13 +97,6 @@ def load(_from, parameters):
         parameters["fixedwidth_skip_header"] = [
             v for v in parameters.get("skip_rows", []) if type(v) == str
         ]
-    elif parameters.get("format") == "csv" and False:
-        parameters["scheme"] = "bcodmo-dynamodb"
-        parameters["ddb_load_table"] = os.environ.get("DDB_LOAD_TABLE")
-        parameters["ddb_load_last_used_table"] = os.environ.get(
-            "DDB_LOAD_LAST_USED_TABLE"
-        )
-        parameters["ddb_endpoint_url"] = os.environ.get("DDB_ENDPOINT")
 
     if parameters.get("parse_seabird_header"):
         """
@@ -330,6 +334,19 @@ def load(_from, parameters):
             resource_names.append(resource_name)
             all_sheet_names.append(sheet)
 
+    if _cache_id is not None:
+        redis_conn = get_redis_connection()
+
+        for resource_name in resource_names:
+            redis_conn.sadd(
+                get_redis_progress_resource_key(_cache_id),
+                resource_name,
+            )
+            redis_conn.set(
+                get_redis_progress_key(resource_name, _cache_id),
+                REDIS_PROGRESS_INIT_FLAG,
+            )
+
     params.extend(
         [
             count_resources(),
@@ -338,6 +355,7 @@ def load(_from, parameters):
                 resource_names,
                 custom_parsers=custom_parsers,
                 custom_loaders=custom_loaders,
+                loader_cache_id=_cache_id,
                 sheets=all_sheet_names,
                 **parameters,
             ),

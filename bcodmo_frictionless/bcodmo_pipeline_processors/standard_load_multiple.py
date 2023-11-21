@@ -33,7 +33,7 @@ class standard_load_multiple(standard_load):
         for i in range(len(self.load_sources)):
             # Set the proper variables for this individual resource
             self._set_individual(i)
-
+            self.options["loader_resource_name"] = self.names[i]
             super(standard_load_multiple, self).process_datapackage(Package())
 
         dp.descriptor.setdefault("resources", []).extend(self.resource_descriptors)

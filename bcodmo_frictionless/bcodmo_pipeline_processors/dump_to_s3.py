@@ -1,6 +1,7 @@
 import os
 import json
 import io
+import redis
 import time
 import logging
 import boto3
@@ -12,6 +13,13 @@ from datapackage_pipelines.utilities.flow_utils import spew_flow
 
 from dataflows.processors.dumpers.dumper_base import DumperBase
 from dataflows.processors.dumpers.file_formats import CSVFormat, JSONFormat
+from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
+    get_redis_progress_key,
+    get_redis_progress_resource_key,
+    get_redis_connection,
+    REDIS_PROGRESS_SAVING_START_FLAG,
+    REDIS_PROGRESS_SAVING_DONE_FLAG,
+)
 
 WINDOWS_LINE_ENDING = b"\r\n"
 UNIX_LINE_ENDING = b"\n"
@@ -86,6 +94,7 @@ class S3Dumper(DumperBase):
         self.use_titles = options.get("use_titles", False)
         self.submission_id = options.get("submission_id", None)
         self.submission_ids = options.get("submission_ids", [])
+        self.cache_id = options.get("cache_id", None)
 
         self.prefix = prefix
         self.bucket_name = bucket_name
@@ -198,6 +207,19 @@ class S3Dumper(DumperBase):
         super(S3Dumper, self).handle_datapackage()
 
     def rows_processor(self, resource, writer, stream):
+        redis_conn = None
+        progress_key = None
+        resource_name = resource.res.descriptor["name"]
+        print("RUNNING ROWS PROCESSOR FOR RESOURCE", resource_name)
+        if self.cache_id:
+            redis_conn = get_redis_connection()
+            redis_conn.sadd(
+                get_redis_progress_resource_key(self.cache_id),
+                resource_name,
+            )
+
+            progress_key = get_redis_progress_key(resource_name, self.cache_id)
+
         row_number = None
         print(f"Received at {time.time()}")
         start1 = time.time()
@@ -205,15 +227,19 @@ class S3Dumper(DumperBase):
         try:
             row_number = 0
             start = time.time()
+            timer = time.time()
             for row in resource:
                 row_number += 1
                 # if row_number < 200:
                 writer.write_row(row)
-                if row_number % 10000 == 0:
-                    print(f"Finished {row_number}")
+                if redis_conn is not None and time.time() - timer > 0.75:
+                    redis_conn.set(progress_key, row_number)
+                    timer = time.time()
                 yield row
             row_number = None
             writer.finalize_file()
+            if redis_conn is not None:
+                redis_conn.set(progress_key, REDIS_PROGRESS_SAVING_START_FLAG)
             print(
                 f"Finished going through loop at {time.time()}, in {time.time() - start1}"
             )
@@ -221,7 +247,7 @@ class S3Dumper(DumperBase):
             # Get resource descriptor
             resource_descriptor = resource.res.descriptor
             for descriptor in self.datapackage.descriptor["resources"]:
-                if descriptor["name"] == resource.res.descriptor["name"]:
+                if descriptor["name"] == resource_name:
                     resource_descriptor = descriptor
 
             # File Hash:
@@ -243,6 +269,8 @@ class S3Dumper(DumperBase):
                 stream.read().encode(), resource.res.source, "text/csv"
             )
             stream.close()
+            if redis_conn is not None:
+                redis_conn.set(progress_key, REDIS_PROGRESS_SAVING_DONE_FLAG)
 
             # Update filesize
             DumperBase.inc_attr(

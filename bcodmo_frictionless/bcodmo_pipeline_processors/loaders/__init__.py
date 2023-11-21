@@ -1,1 +1,1 @@
-from .dynamodb import DynamoDBLoader
+from .bcodmo_aws import BcodmoAWS
