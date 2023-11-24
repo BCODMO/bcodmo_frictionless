@@ -22,7 +22,7 @@ def process_resource(rows, edited, missing_values):
         row_counter += 1
         try:
             if row_counter in edited:
-                edited_cells = edited[row_counter]
+                edited_cells = edited.pop(row_counter)
                 for edited_cell in edited_cells:
                     field = edited_cell.get("field")
                     value = edited_cell.get("value")
@@ -37,6 +37,10 @@ def process_resource(rows, edited, missing_values):
             raise type(e)(str(e) + f" at row {row_counter}").with_traceback(
                 sys.exc_info()[2]
             )
+    if len(edited.keys()):
+        raise Exception(
+            f"Passed in row numbers that were not used ({str(list(edited.keys()))}) to the edit_cells processor."
+        )
 
 
 def edit_cells(edited, resources=None):

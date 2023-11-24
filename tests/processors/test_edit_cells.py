@@ -113,3 +113,17 @@ def test_edit_cells_date():
     ]
     rows, datapackage, _ = Flow(*flows).results()
     assert rows[0][0]["col2"] == dateutil.parser.parse("2014-02-13T10:24:09")
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_edit_cells_unused():
+    flows = [
+        data,
+        edit_cells({"edited": {5: [{"field": "col1", "value": "hello"}]}}),
+    ]
+    try:
+        rows, datapackage, _ = Flow(*flows).results()
+        # We shouldn't get here, it should error
+        assert False == True
+    except:
+        pass
