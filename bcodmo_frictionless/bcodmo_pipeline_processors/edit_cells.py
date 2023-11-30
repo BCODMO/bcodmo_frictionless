@@ -21,8 +21,11 @@ def process_resource(rows, edited, missing_values):
     for row in rows:
         row_counter += 1
         try:
-            if row_counter in edited:
-                edited_cells = edited.pop(row_counter)
+            if row_counter in edited or str(row_counter) in edited:
+                try:
+                    edited_cells = edited.pop(row_counter)
+                except KeyError:
+                    edited_cells = edited.pop(str(row_counter))
                 for edited_cell in edited_cells:
                     field = edited_cell.get("field")
                     value = edited_cell.get("value")

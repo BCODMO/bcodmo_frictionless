@@ -185,7 +185,7 @@ def concatenate(
 
         if redis_conn is not None:
             redis_conn.sadd(
-                get_redis_progress_resource_key(_cache_id),
+                get_redis_progress_resource_key(cache_id),
                 target["name"],
             )
         package.pkg.descriptor["resources"] = new_resources
