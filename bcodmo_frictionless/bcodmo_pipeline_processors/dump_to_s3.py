@@ -95,6 +95,7 @@ class S3Dumper(DumperBase):
         self.submission_id = options.get("submission_id", None)
         self.submission_ids = options.get("submission_ids", [])
         self.cache_id = options.get("cache_id", None)
+        self.delete = options.get("delete", False)
 
         self.prefix = prefix
         self.bucket_name = bucket_name
@@ -115,6 +116,27 @@ class S3Dumper(DumperBase):
         else:
             logging.warn("Using base boto credentials for S3 Dumper")
             self.s3 = boto3.resource("s3")
+        if self.delete:
+            s3_client = boto3.client(
+                "s3",
+                aws_access_key_id=access_key,
+                aws_secret_access_key=secret_access_key,
+                endpoint_url=host,
+            )
+            res = s3_client.list_objects_v2(
+                Bucket=self.bucket_name,
+                Prefix=self.prefix,
+            )
+            if "Contents" in res:
+                contents = res["Contents"]
+                if len(contents) >= 10:
+                    raise Exception(
+                        f"Throwing an error from the dump_to_s3 processor because the number of files to be deleted was more than 10. This is a safety measure to ensure we don't accidently more files than expected."
+                    )
+                s3_client.delete_objects(
+                    Bucket=self.bucket_name,
+                    Delete={"Objects": [{"Key": obj["Key"]} for obj in contents]},
+                )
 
     def process_datapackage(self, datapackage):
         datapackage = super(S3Dumper, self).process_datapackage(datapackage)
@@ -155,10 +177,10 @@ class S3Dumper(DumperBase):
         contents = contents.replace(WINDOWS_LINE_ENDING, UNIX_LINE_ENDING)
 
         start = time.time()
-        print(f"Starting save file {time.time()}")
+        # print(f"Starting save file {time.time()}")
         obj = self.s3.Object(self.bucket_name, obj_name)
         obj.put(Body=contents, ContentType=content_type)
-        print(f"Took {time.time() - start} to save the file ({path})")
+        # print(f"Took {time.time() - start} to save the file ({path})")
 
         return path, len(contents)
 
@@ -210,7 +232,6 @@ class S3Dumper(DumperBase):
         redis_conn = None
         progress_key = None
         resource_name = resource.res.descriptor["name"]
-        print("RUNNING ROWS PROCESSOR FOR RESOURCE", resource_name)
         if self.cache_id:
             redis_conn = get_redis_connection()
             redis_conn.sadd(
@@ -221,7 +242,7 @@ class S3Dumper(DumperBase):
             progress_key = get_redis_progress_key(resource_name, self.cache_id)
 
         row_number = None
-        print(f"Received at {time.time()}")
+        # print(f"Received at {time.time()}")
         start1 = time.time()
 
         try:
@@ -240,9 +261,9 @@ class S3Dumper(DumperBase):
             writer.finalize_file()
             if redis_conn is not None:
                 redis_conn.set(progress_key, REDIS_PROGRESS_SAVING_START_FLAG)
-            print(
-                f"Finished going through loop at {time.time()}, in {time.time() - start1}"
-            )
+            # print(
+            #    f"Finished going through loop at {time.time()}, in {time.time() - start1}"
+            # )
 
             # Get resource descriptor
             resource_descriptor = resource.res.descriptor
@@ -261,7 +282,7 @@ class S3Dumper(DumperBase):
                 DumperBase.set_attr(
                     resource_descriptor, self.resource_hash, hasher.hexdigest()
                 )
-            print(f"After hash, starting to write file at {time.time()}")
+            # print(f"After hash, starting to write file at {time.time()}")
 
             # Finalise
             stream.seek(0)
