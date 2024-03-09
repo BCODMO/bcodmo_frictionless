@@ -245,6 +245,9 @@ class S3Dumper(DumperBase):
         # print(f"Received at {time.time()}")
         start1 = time.time()
 
+        writer_timer_sum = 0
+        writer_timer_count = 0
+
         try:
             row_number = 0
             start = time.time()
@@ -252,7 +255,17 @@ class S3Dumper(DumperBase):
             for row in resource:
                 row_number += 1
                 # if row_number < 200:
+                writer_timer = time.time()
                 writer.write_row(row)
+                writer_timer_sum += time.time() - writer_timer
+                writer_timer_count += 1
+                if writer_timer_count >= 1000:
+                    print(
+                        f"Average time to write: {writer_timer_sum / writer_timer_count}"
+                    )
+                    writer_timer_count = 0
+                    writer_timer_sum = 0
+
                 if redis_conn is not None and time.time() - timer > 0.75:
                     redis_conn.set(progress_key, row_number)
                     timer = time.time()
