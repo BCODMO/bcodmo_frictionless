@@ -248,27 +248,53 @@ class S3Dumper(DumperBase):
         writer_timer_sum = 0
         writer_timer_count = 0
 
+        process_timer_sum = 0
+        process_timer_count = 0
+        process_timer = None
+
+        redis_timer_sum = 0
+        redis_timer_count = 0
+
         try:
             row_number = 0
             start = time.time()
             timer = time.time()
             for row in resource:
+                if process_timer is not None:
+                    process_timer_sum += time.time() - process_timer
+                    process_timer_count += 1
+                if process_timer_count >= 1000:
+                    print(f"process: {process_timer_sum / process_timer_count}")
+                    process_timer_count = 0
+                    process_timer_sum = 0
+
                 row_number += 1
                 # if row_number < 200:
                 writer_timer = time.time()
+
                 writer.write_row(row)
+
                 writer_timer_sum += time.time() - writer_timer
                 writer_timer_count += 1
                 if writer_timer_count >= 1000:
-                    print(
-                        f"Average time to write: {writer_timer_sum / writer_timer_count}"
-                    )
+                    print(f"write: {writer_timer_sum / writer_timer_count}")
                     writer_timer_count = 0
                     writer_timer_sum = 0
+
+                redis_timer = time.time()
 
                 if redis_conn is not None and time.time() - timer > 0.75:
                     redis_conn.set(progress_key, row_number)
                     timer = time.time()
+                redis_timer_sum += time.time() - redis_timer
+                redis_timer_count += 1
+                if redis_timer_count >= 1000:
+                    print(f"redis: {redis_timer_sum / redis_timer_count}")
+                    redis_timer_count = 0
+                    redis_timer_sum = 0
+
+                process_timer = time.time()
+
                 yield row
             row_number = None
             writer.finalize_file()
