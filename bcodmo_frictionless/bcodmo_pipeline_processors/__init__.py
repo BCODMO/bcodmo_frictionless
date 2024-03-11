@@ -20,3 +20,5 @@ from .extract_nonnumeric import flow as extract_nonnumeric
 from .dump_to_s3 import flow as dump_to_s3
 from .set_types import flow as set_types
 from .edit_cells import flow as edit_cells
+
+from .join import flow as join
