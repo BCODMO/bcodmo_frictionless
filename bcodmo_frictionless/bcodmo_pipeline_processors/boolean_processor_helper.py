@@ -7,7 +7,7 @@ from dateutil import parser
 from pyparsing import (
     Regex,
     Group,
-    operatorPrecedence,
+    infix_notation,
     opAssoc,
     Literal,
     Forward,
@@ -39,7 +39,7 @@ boolean_comparison_term = date | number | variable | regex | string | null | row
 boolean_condition = Group(
     boolean_comparison_term + boolean_operator + boolean_comparison_term,
 )
-boolean_expr = operatorPrecedence(
+boolean_expr = infix_notation(
     boolean_condition,
     [
         ("AND", 2, opAssoc.LEFT,),
@@ -205,7 +205,7 @@ addop = plus | minus
 multop = mult | div
 expop = Literal("^")
 
-math_expr = operatorPrecedence(
+math_expr = infix_notation(
     math_term,
     [(expop, 2, opAssoc.LEFT,), (multop, 2, opAssoc.LEFT,), (addop, 2, opAssoc.LEFT,),],
 )

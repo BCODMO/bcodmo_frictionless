@@ -10,11 +10,11 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
 
 
 class BcodmoAWS(AWSLoader):
-
     options = [
         "s3_endpoint_url",
         "loader_cache_id",
         "loader_resource_name",
+        "preloaded_chars",
     ]
 
     def __init__(
@@ -23,21 +23,28 @@ class BcodmoAWS(AWSLoader):
         s3_endpoint_url=None,
         loader_cache_id=None,
         loader_resource_name=None,
+        preloaded_chars=None,
     ):
         super(BcodmoAWS, self).__init__(s3_endpoint_url=s3_endpoint_url)
         self.loader_cache_id = loader_cache_id
         self.loader_resource_name = loader_resource_name
-        print(f"Got resource name in loader {loader_resource_name}")
+        self.preloaded_chars = preloaded_chars
 
     def load(self, source, mode="t", encoding=None):
         redis_conn = None
         if self.loader_cache_id is not None:
             redis_conn = get_redis_connection()
-            redis_conn.set(
-                get_redis_progress_key(self.loader_resource_name, self.loader_cache_id),
-                REDIS_PROGRESS_LOADING_START_FLAG,
-            )
-        chars = super(BcodmoAWS, self).load(source, mode=mode, encoding=encoding)
+            if redis_conn is not None:
+                redis_conn.set(
+                    get_redis_progress_key(
+                        self.loader_resource_name, self.loader_cache_id
+                    ),
+                    REDIS_PROGRESS_LOADING_START_FLAG,
+                )
+        if self.preloaded_chars is None:
+            chars = super(BcodmoAWS, self).load(source, mode=mode, encoding=encoding)
+        else:
+            chars = self.preloaded_chars
         if redis_conn is not None:
             redis_conn.set(
                 get_redis_progress_key(self.loader_resource_name, self.loader_cache_id),

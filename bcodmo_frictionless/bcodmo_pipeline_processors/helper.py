@@ -10,7 +10,8 @@ def get_missing_values(res):
 
 
 def get_redis_connection():
-    return redis.Redis.from_url(os.environ.get("REDIS_PROGRESS_URL", None))
+    redis_url = os.environ.get("REDIS_PROGRESS_URL", None)
+    return redis.Redis.from_url(redis_url) if redis_url is not None else None
 
 
 def get_redis_progress_key(resource, cache_id):

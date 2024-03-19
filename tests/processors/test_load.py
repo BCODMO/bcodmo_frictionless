@@ -72,7 +72,7 @@ def test_load_xlsx_sheet_regex():
                 "from": "data/test.xlsx",
                 "name": "res",
                 "format": "xlsx",
-                "sheet": "test\d",
+                "sheet": r"test\d",
                 "sheet_regex": True,
             }
         )
@@ -90,7 +90,7 @@ def test_load_xlsx_sheet_regex_multiple():
                 "from": ["data/test.xlsx", "data/test.xlsx"],
                 "name": "res",
                 "format": "xlsx",
-                "sheet": "test\d",
+                "sheet": r"test\d",
                 "sheet_regex": True,
             }
         )
@@ -307,6 +307,7 @@ def test_load_s3():
                 "from": "s3://testing_bucket/test.csv",
                 "name": "res",
                 "format": "csv",
+                "cache_id": "123",
             }
         )
     ]
@@ -332,6 +333,7 @@ def test_load_s3_path():
                 "name": "res",
                 "format": "csv",
                 "input_path_pattern": True,
+                "cache_id": "123",
             }
         )
     ]
@@ -354,14 +356,20 @@ def test_load_s3_path_xlsx_regex():
                 "from": "s3://testing_bucket/test.xlsx",
                 "name": "res",
                 "format": "xlsx",
-                "sheet": "test\d",
+                "sheet": r"test\d",
                 "sheet_regex": True,
+                "cache_id": "123",
             }
         )
     ]
     rows, datapackage, _ = Flow(*flows).results()
+    print(rows)
     assert len(datapackage.resources) == 4
     assert datapackage.resources[0].name == "test2"
+    assert rows[0][0]["col5"] == "abc"
+    assert rows[1][0]["col2"] == 1
+    assert rows[2][2]["col7"] == Decimal("53.1")
+    assert rows[3][1]["col6"] == 2
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
@@ -446,7 +454,7 @@ def test_load_capture_skipped_rows_multiple_matches():
                 "deduplicate_headers": True,
                 "skip_rows": ["#", "*"],
                 "seabird_capture_skipped_rows": [
-                    {"column_name": "test1", "regex": "\*\* (.*)"}
+                    {"column_name": "test1", "regex": r"\*\* (.*)"}
                 ],
             }
         )
@@ -469,7 +477,7 @@ def test_load_capture_skipped_rows_multiple_matches_no_join():
                 "deduplicate_headers": True,
                 "skip_rows": ["#", "*"],
                 "seabird_capture_skipped_rows": [
-                    {"column_name": "test1", "regex": "\*\* (.*)"}
+                    {"column_name": "test1", "regex": r"\*\* (.*)"}
                 ],
                 "seabird_capture_skipped_rows_join": False,
             }
@@ -494,7 +502,7 @@ def test_load_capture_skipped_rows_multiple_matches_separator():
                 "deduplicate_headers": True,
                 "skip_rows": ["#", "*"],
                 "seabird_capture_skipped_rows": [
-                    {"column_name": "test1", "regex": "\*\* (.*)"}
+                    {"column_name": "test1", "regex": r"\*\* (.*)"}
                 ],
                 "seabird_capture_skipped_rows_join_string": ":",
             }
@@ -541,7 +549,7 @@ def test_load_s3_path_xlsx_regex_object_spaces():
                 "from": "s3://testing_bucket/test with spaces.xlsx",
                 "name": "res",
                 "format": "xlsx",
-                "sheet": "test\d",
+                "sheet": r"test\d",
                 "sheet_regex": True,
             }
         )
@@ -560,7 +568,7 @@ def test_load_regex_csv():
                 "name": "res",
                 "format": "bcodmo-regex-csv",
                 "skip_rows": ["#", "*"],
-                "delimiter": "\s+",
+                "delimiter": r"\s+",
             }
         )
     ]
@@ -598,10 +606,10 @@ def test_load_regex_csv_capture_skipped_rows():
                 "from": "data/test_regex.csv",
                 "name": "res",
                 "format": "bcodmo-regex-csv",
-                "delimiter": "\s+",
+                "delimiter": r"\s+",
                 "skip_rows": ["#", "*"],
                 "capture_skipped_rows": [
-                    {"column_name": "test1", "regex": "\*\* (.*)"}
+                    {"column_name": "test1", "regex": r"\*\* (.*)"}
                 ],
                 "capture_skipped_rows_join": True,
             }
@@ -621,10 +629,10 @@ def test_load_regex_csv_capture_skipped_rows_column_name_bug():
                 "from": ["data/test_regex2.txt"],
                 "name": "res",
                 "format": "bcodmo-regex-csv",
-                "delimiter": "\s+",
-                "skip_rows": [{"value": "\*{6}.*", "type": "regex"}],
+                "delimiter": r"\s+",
+                "skip_rows": [{"value": r"\*{6}.*", "type": "regex"}],
                 "capture_skipped_rows": [
-                    {"column_name": "EXPOCODE", "regex": "EXPOCODE\s+(.*)\s+WHP.*"}
+                    {"column_name": "EXPOCODE", "regex": r"EXPOCODE\s+(.*)\s+WHP.*"}
                 ],
                 "headers": [4, 5],
                 "ignore_blank_headers": False,

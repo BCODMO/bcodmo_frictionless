@@ -264,7 +264,7 @@ class S3Dumper(DumperBase):
                     process_timer_sum += time.time() - process_timer
                     process_timer_count += 1
                 if process_timer_count >= 1000:
-                    print(f"process: {process_timer_sum / process_timer_count}")
+                    # print(f"process: {process_timer_sum / process_timer_count}")
                     process_timer_count = 0
                     process_timer_sum = 0
 
@@ -277,7 +277,7 @@ class S3Dumper(DumperBase):
                 writer_timer_sum += time.time() - writer_timer
                 writer_timer_count += 1
                 if writer_timer_count >= 1000:
-                    print(f"write: {writer_timer_sum / writer_timer_count}")
+                    # print(f"write: {writer_timer_sum / writer_timer_count}")
                     writer_timer_count = 0
                     writer_timer_sum = 0
 
@@ -289,7 +289,7 @@ class S3Dumper(DumperBase):
                 redis_timer_sum += time.time() - redis_timer
                 redis_timer_count += 1
                 if redis_timer_count >= 1000:
-                    print(f"redis: {redis_timer_sum / redis_timer_count}")
+                    # print(f"redis: {redis_timer_sum / redis_timer_count}")
                     redis_timer_count = 0
                     redis_timer_sum = 0
 

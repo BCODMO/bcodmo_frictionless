@@ -147,7 +147,10 @@ def load(_from, parameters):
 
             for r in package:
                 if r.res.name in names:
-                    missing_data_values = r.res.descriptor.get("schema", {},).get(
+                    missing_data_values = r.res.descriptor.get(
+                        "schema",
+                        {},
+                    ).get(
                         "missingValues",
                         [],
                     )
@@ -336,16 +339,16 @@ def load(_from, parameters):
 
     if _cache_id is not None:
         redis_conn = get_redis_connection()
-
-        for resource_name in resource_names:
-            redis_conn.sadd(
-                get_redis_progress_resource_key(_cache_id),
-                resource_name,
-            )
-            redis_conn.set(
-                get_redis_progress_key(resource_name, _cache_id),
-                REDIS_PROGRESS_INIT_FLAG,
-            )
+        if redis_conn is not None:
+            for resource_name in resource_names:
+                redis_conn.sadd(
+                    get_redis_progress_resource_key(_cache_id),
+                    resource_name,
+                )
+                redis_conn.set(
+                    get_redis_progress_key(resource_name, _cache_id),
+                    REDIS_PROGRESS_INIT_FLAG,
+                )
 
     params.extend(
         [

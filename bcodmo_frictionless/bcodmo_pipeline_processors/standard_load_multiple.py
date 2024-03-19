@@ -1,5 +1,35 @@
 from dataflows import load as standard_load
+
+from billiard import Process, Queue
 from datapackage import Package
+import time
+from tabulator import Stream
+from tabulator.helpers import extract_options
+from dataflows.processors.parsers import XMLParser, ExcelXMLParser, ExtendedSQLParser
+from tableschema.schema import Schema
+import io
+import os
+from bcodmo_frictionless.bcodmo_pipeline_processors.loaders import (
+    BcodmoAWS,
+)
+
+
+def _preload_data(load_source, mode, loader, data_q, encoding_q):
+    print("PRELOADING DATA")
+    start = time.time()
+    chars = loader.load(load_source, mode=mode)
+
+    r = data_q.get()
+    r[load_source] = chars.read()
+    data_q.put(r)
+
+    r = encoding_q.get()
+    r[load_source] = loader.encoding
+    encoding_q.put(r)
+
+
+def get_mode(_format):
+    return "b" if _format in ["xlsx", "xls"] else "t"
 
 
 class standard_load_multiple(standard_load):
@@ -18,6 +48,7 @@ class standard_load_multiple(standard_load):
     def _set_individual(self, i):
         load_source = self.load_sources[i]
         name = self.names[i]
+        self.preloaded_chars = None
 
         self.load_source = load_source
         self.name = name
@@ -30,11 +61,178 @@ class standard_load_multiple(standard_load):
             del self.options["sheet"]
 
     def process_datapackage(self, dp: Package):
-        for i in range(len(self.load_sources)):
+        preloaded_data = {}
+        encodings = {}
+
+        # Only do preloaded data for bcodmo-aws loader
+        if (
+            self.options.get("scheme", None) == "bcodmo-aws"
+            and len(self.load_sources) > 1
+        ):
+            procs = []
+            data_q = Queue()
+            data_q.put({})
+            encoding_q = Queue()
+            encoding_q.put({})
+
+            # Keep track of which sources we've already loaded.
+            loaded_sources = {}
+
+            for i, load_source in enumerate(self.load_sources):
+                if load_source not in loaded_sources:
+                    self._set_individual(i)
+                    self.options["loader_resource_name"] = self.names[i]
+                    mode = get_mode(self.options.get("format"))
+
+                    loader_options = extract_options(self.options, BcodmoAWS.options)
+
+                    proc = Process(
+                        target=_preload_data,
+                        args=(
+                            load_source,
+                            mode,
+                            BcodmoAWS(**loader_options),
+                            data_q,
+                            encoding_q,
+                        ),
+                    )
+                    procs.append(proc)
+                    proc.start()
+
+                    loaded_sources[load_source] = True
+
+            for proc in procs:
+                proc.join()
+
+            preloaded_data = data_q.get()
+            encodings = encoding_q.get()
+
+        for i, load_source in enumerate(self.load_sources):
             # Set the proper variables for this individual resource
+
             self._set_individual(i)
             self.options["loader_resource_name"] = self.names[i]
+
+            if load_source in preloaded_data:
+                chars_s = preloaded_data[load_source]
+                encoding = encodings[load_source]
+                mode = get_mode(self.options.get("format"))
+                if mode == "b":
+                    self.preloaded_chars = io.BufferedRandom(io.BytesIO(chars_s))
+                else:
+                    self.preloaded_chars = io.TextIOWrapper(
+                        io.BytesIO(bytes(chars_s.encode(encoding)))
+                    )
+
             super(standard_load_multiple, self).process_datapackage(Package())
 
+        dp.descriptor.setdefault("resources", []).extend(self.resource_descriptors)
+        return dp
+
+    def safe_process_datapackage(self, dp: Package):
+        # If loading from datapackage & resource iterator:
+        if isinstance(self.load_source, tuple):
+            datapackage_descriptor, resource_iterator = self.load_source
+            resources = datapackage_descriptor["resources"]
+            resource_matcher = ResourceMatcher(self.resources, datapackage_descriptor)
+            for resource_descriptor in datapackage_descriptor["resources"]:
+                if resource_matcher.match(resource_descriptor["name"]):
+                    self.resource_descriptors.append(resource_descriptor)
+            self.iterators = (
+                resource
+                for resource, descriptor in zip(resource_iterator, resources)
+                if resource_matcher.match(descriptor["name"])
+            )
+
+        # If load_source is string:
+        else:
+            # Handle Environment vars if necessary:
+            if self.load_source.startswith("env://"):
+                env_var = self.load_source[6:]
+                self.load_source = os.environ.get(env_var)
+                if self.load_source is None:
+                    raise ValueError(f"Couldn't find value for env var '{env_var}'")
+
+            # Loading from datapackage:
+            if (
+                os.path.basename(self.load_source) == "datapackage.json"
+                or self.options.get("format") == "datapackage"
+            ):
+                self.load_dp = Package(self.load_source)
+                resource_matcher = ResourceMatcher(self.resources, self.load_dp)
+                for resource in self.load_dp.resources:
+                    if resource_matcher.match(resource.name):
+                        self.resource_descriptors.append(resource.descriptor)
+                        self.iterators.append(resource.iter(keyed=True, cast=True))
+
+            # Loading for any other source
+            else:
+                path = os.path.basename(self.load_source)
+                path = os.path.splitext(path)[0]
+                descriptor = dict(
+                    path=self.name or path, profile="tabular-data-resource"
+                )
+                self.resource_descriptors.append(descriptor)
+                descriptor["name"] = self.name or path
+                if "encoding" in self.options:
+                    descriptor["encoding"] = self.options["encoding"]
+                self.options.setdefault("custom_parsers", {}).setdefault(
+                    "xml", XMLParser
+                )
+                self.options.setdefault("custom_parsers", {}).setdefault(
+                    "excel-xml", ExcelXMLParser
+                )
+                self.options.setdefault("custom_parsers", {}).setdefault(
+                    "sql", ExtendedSQLParser
+                )
+                self.options.setdefault("ignore_blank_headers", True)
+                self.options.setdefault("headers", 1)
+
+                """ Change to add preloaded data """
+                options = self.options
+                if self.preloaded_chars is not None:
+                    options["preloaded_chars"] = self.preloaded_chars
+                stream: Stream = Stream(self.load_source, **options).open()
+                """ Finish change to add preloaded data """
+
+                if len(stream.headers) != len(set(stream.headers)):
+                    if not self.deduplicate_headers:
+                        raise ValueError(
+                            "Found duplicate headers."
+                            + "Use the `deduplicate_headers` flag (found headers=%r)"
+                            % stream.headers
+                        )
+                    stream.headers = self.rename_duplicate_headers(stream.headers)
+                schema = Schema().infer(
+                    stream.sample,
+                    headers=stream.headers,
+                    confidence=1,
+                    guesser_cls=self.guesser,
+                )
+                # restore schema field names to original headers
+                for header, field in zip(stream.headers, schema["fields"]):
+                    field["name"] = header
+                if self.override_schema:
+                    schema.update(self.override_schema)
+                if self.override_fields:
+                    fields = schema.get("fields", [])
+                    for field in fields:
+                        field.update(self.override_fields.get(field["name"], {}))
+                if self.extract_missing_values:
+                    missing_values = schema.get("missingValues", [])
+                    if not self.extract_missing_values["values"]:
+                        self.extract_missing_values["values"] = missing_values
+                    schema["fields"].append(
+                        {
+                            "name": self.extract_missing_values["target"],
+                            "type": "object",
+                            "format": "default",
+                            "values": self.extract_missing_values["values"],
+                        }
+                    )
+                descriptor["schema"] = schema
+                descriptor["format"] = self.options.get("format", stream.format)
+                descriptor["path"] += ".{}".format(stream.format)
+                self.iterators.append(stream.iter(keyed=True))
         dp.descriptor.setdefault("resources", []).extend(self.resource_descriptors)
         return dp

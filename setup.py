@@ -4,7 +4,7 @@ required = [
     "pandas>=0.25.3",
     "datapackage-pipelines==2.2.6",
     # "datapackage-pipelines @ git+https://github.com/frictionlessdata/datapackage-pipelines.git@d78d1391adf6470ca484303e512e038f7dc57483",
-    "pyparsing==2.2.0",
+    "pyparsing==3.1.2",
     "dataflows==0.3.1",
     # "dataflows @ git+https://github.com/cschloer/dataflows.git@master",
     # "tabulator==1.53.5",

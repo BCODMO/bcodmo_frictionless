@@ -1,6 +1,6 @@
 import pytest
 import os
-from dataflows import Flow, join
+from dataflows import Flow
 from decimal import Decimal
 
 from bcodmo_frictionless.bcodmo_pipeline_processors import *
@@ -25,15 +25,19 @@ def test_join():
     flows = [
         data2,
         data1,
-        join(
-            "res_1",
-            "{#}",
-            "res_2",
-            "{#}",
-            fields={"col2": {"name": "col2"}},
-            source_delete=True,
-            mode="half-outer",
-        ),
+        join({
+            "source": {
+                "name": "res_1",
+                "key": "{#}",
+                "delete": True,
+            },
+            "target": {
+                "name": "res_2",
+                "key": "{#}",
+            },
+            "fields": {"col2": {"name": "col2"}},
+            "mode": "half-outer",
+        }),
     ]
     rows, datapackage, _ = Flow(*flows).results()
     print(rows)

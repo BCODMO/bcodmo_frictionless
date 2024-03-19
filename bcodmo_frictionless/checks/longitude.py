@@ -6,17 +6,14 @@ from decimal import Decimal
 
 @check("longitude-bounds", type="custom", context="body")
 class LongitudeBounds(object):
-
     # Public
 
     def __init__(self, constraint, **options):
         self.__constraint = constraint
 
     def check_row(self, cells):
-        print("CECHKING LON BOUNDS")
         errors = []
         for cell in cells:
-
             row_number = cell.get("row-number")
             if cell["header"] == self.__constraint:
                 field = cell["field"]
@@ -29,7 +26,6 @@ class LongitudeBounds(object):
                 message = None
                 value = cell["value"]
                 if value and value not in field.missing_values:
-
                     try:
                         assert type(value) in [int, Decimal, float]
                     except AssertionError:
