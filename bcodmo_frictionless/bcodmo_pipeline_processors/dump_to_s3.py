@@ -10,6 +10,7 @@ import hashlib
 from dataflows import Flow
 from datapackage_pipelines.wrapper import ingest
 from datapackage_pipelines.utilities.flow_utils import spew_flow
+from billiard import Process, Queue
 
 from dataflows.processors.dumpers.dumper_base import DumperBase
 from dataflows.processors.dumpers.file_formats import CSVFormat, JSONFormat
@@ -96,12 +97,18 @@ class S3Dumper(DumperBase):
         self.submission_ids = options.get("submission_ids", [])
         self.cache_id = options.get("cache_id", None)
         self.delete = options.get("delete", False)
+        self.limit_yield = options.get("limit_yield", None)
 
         self.prefix = prefix
         self.bucket_name = bucket_name
         self.save_pipeline_spec = options.get("save_pipeline_spec", False)
         self.pipeline_spec = options.get("pipeline_spec", None)
         self.data_manager = options.get("data_manager", {})
+        self.procs = []
+        self.error_q = Queue()
+        self.error_q.put({})
+        self.filesize_q = Queue()
+        self.filesize_q.put({})
 
         access_key = os.environ.get("AWS_ACCESS_KEY_ID")
         secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
@@ -168,23 +175,67 @@ class S3Dumper(DumperBase):
 
         return datapackage
 
-    def write_file_to_output(self, contents, path, content_type):
-        if path.startswith("."):
-            path = path[1:]
-        if path.startswith("/"):
-            path = path[1:]
-        obj_name = os.path.join(self.prefix, path)
-        contents = contents.replace(WINDOWS_LINE_ENDING, UNIX_LINE_ENDING)
-
+    def write_file_to_output(
+        self,
+        contents,
+        path,
+        content_type,
+        on_complete=None,
+        error_q=None,
+        filesize_q=None,
+    ):
         start = time.time()
-        # print(f"Starting save file {time.time()}")
-        obj = self.s3.Object(self.bucket_name, obj_name)
-        obj.put(Body=contents, ContentType=content_type)
-        # print(f"Took {time.time() - start} to save the file ({path})")
+        try:
+            if path.startswith("."):
+                path = path[1:]
+            if path.startswith("/"):
+                path = path[1:]
+            obj_name = os.path.join(self.prefix, path)
+            contents = contents.replace(WINDOWS_LINE_ENDING, UNIX_LINE_ENDING)
 
-        return path, len(contents)
+            start = time.time()
+            # print(f"Starting save file {time.time()}")
+            obj = self.s3.Object(self.bucket_name, obj_name)
+            obj.put(Body=contents, ContentType=content_type)
+            # print(f"Took {time.time() - start} to save the file ({path})")
+            if filesize_q is not None:
+                r = filesize_q.get()
+                r[path] = len(contents)
+                filesize_q.put(r)
+
+            if on_complete is not None:
+                on_complete()
+
+            print(f"Took {round(time.time() -start, 3)} to upload {path}")
+            return path, len(contents)
+
+        except Exception as e:
+            print("Got an error in write file to output!", e)
+            if error_q is not None:
+                r = error_q.get()
+                r[path] = e
+                error_q.put(r)
+
+            else:
+                raise e
+        return path, 0
 
     def handle_datapackage(self):
+        for proc in self.procs:
+            proc.join()
+
+        errors = self.error_q.get()
+        for e in errors.values():
+            raise e
+
+        filesizes = self.filesize_q.get()
+        for filesize in errors.values():
+            # Update filesize
+            DumperBase.inc_attr(
+                self.datapackage.descriptor, self.datapackage_bytes, filesize
+            )
+            DumperBase.inc_attr(resource_descriptor, self.resource_bytes, filesize)
+
         if self.save_pipeline_spec and self.pipeline_spec:
             # self from pipeline_spec inputted
             try:
@@ -295,7 +346,8 @@ class S3Dumper(DumperBase):
 
                 process_timer = time.time()
 
-                yield row
+                if self.limit_yield is None or self.limit_yield < 0 or row_number <= self.limit_yield:
+                    yield row
             row_number = None
             writer.finalize_file()
             if redis_conn is not None:
@@ -325,18 +377,37 @@ class S3Dumper(DumperBase):
 
             # Finalise
             stream.seek(0)
-            _, filesize = self.write_file_to_output(
-                stream.read().encode(), resource.res.source, "text/csv"
-            )
-            stream.close()
-            if redis_conn is not None:
-                redis_conn.set(progress_key, REDIS_PROGRESS_SAVING_DONE_FLAG)
+            if len(self.datapackage.descriptor["resources"]) > 1:
+                # Multiprocess if we're downloading multiple
+                def on_complete():
+                    if redis_conn is not None:
+                        redis_conn.set(progress_key, REDIS_PROGRESS_SAVING_DONE_FLAG)
 
-            # Update filesize
-            DumperBase.inc_attr(
-                self.datapackage.descriptor, self.datapackage_bytes, filesize
-            )
-            DumperBase.inc_attr(resource_descriptor, self.resource_bytes, filesize)
+                proc = Process(
+                    target=self.write_file_to_output,
+                    args=(
+                        stream.read().encode(),
+                        resource.res.source,
+                        "text/csv",
+                    ),
+                    kwargs={
+                        "on_complete": on_complete,
+                        "error_q": self.error_q,
+                        "filesize_q": self.filesize_q,
+                    },
+                )
+                self.procs.append(proc)
+                proc.start()
+            else:
+                self.write_file_to_output(
+                    stream.read().encode(),
+                    resource.res.source,
+                    "text/csv",
+                    error_q=self.error_q,
+                    filesize_q=self.filesize_q,
+                )
+
+            stream.close()
         except Exception as e:
             row_number_text = ""
             if row_number is not None:

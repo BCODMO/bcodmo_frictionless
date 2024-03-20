@@ -15,7 +15,6 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.loaders import (
 
 
 def _preload_data(load_source, mode, loader, data_q, encoding_q):
-    print("PRELOADING DATA")
     start = time.time()
     chars = loader.load(load_source, mode=mode)
 
