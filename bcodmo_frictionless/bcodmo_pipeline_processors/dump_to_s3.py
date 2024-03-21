@@ -212,6 +212,7 @@ class S3Dumper(DumperBase):
             object_key = d["object_key"]
             parts = []
             filesize = 0
+            is_multipart = False
             for proc in procs:
                 partsize, part, err = proc.get()
                 if err is not None:
@@ -219,18 +220,23 @@ class S3Dumper(DumperBase):
                 parts.append(part)
                 filesize += partsize
 
-            parts.sort(key=lambda p: p["part_number"])
-            response = self.s3_client.complete_multipart_upload(
-                    Bucket=self.bucket_name,
-                    Key=object_key,
-                    UploadId=upload_id,
-                    MultipartUpload={
-                        'Parts': [{"ETag": p["etag"], "PartNumber": p["part_number"]} for p in parts]
-                    },
-            )
-            etags[resource_name] = response["ETag"]
+            is_multipart = parts[0]["part_number"] is not None
+            if is_multipart:
+                parts.sort(key=lambda p: p["part_number"])
+                response = self.s3_client.complete_multipart_upload(
+                        Bucket=self.bucket_name,
+                        Key=object_key,
+                        UploadId=upload_id,
+                        MultipartUpload={
+                            'Parts': [{"ETag": p["etag"], "PartNumber": p["part_number"]} for p in parts]
+                        },
+                )
+                etags[resource_name] = response["ETag"]
+            else:
+                etags[resource_name] = parts[0]["etag"]
 
             filesizes[resource_name] = filesize
+
 
 
 
@@ -321,6 +327,37 @@ class S3Dumper(DumperBase):
         return path, len(contents)
 
     @staticmethod
+    def write_file(contents, object_key, content_type, bucket_name):
+        try:
+            contents = contents.replace(WINDOWS_LINE_ENDING, UNIX_LINE_ENDING)
+
+            # We create our own client for this part, because it seems to be faster
+            start = time.time()
+            access_key = os.environ.get("AWS_ACCESS_KEY_ID")
+            secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+            host = os.environ.get("LAMINAR_S3_HOST")
+            if access_key and host and secret_access_key:
+                s3 = boto3.resource(
+                    "s3",
+                    aws_access_key_id=access_key,
+                    aws_secret_access_key=secret_access_key,
+                    endpoint_url=host,
+                )
+            else:
+                s3 = boto3.resource("s3")
+            obj = s3.Object(bucket_name, object_key)
+            response = obj.put(Body=contents, ContentType=content_type)
+            print(f"Completed uploading file of size {round(len(contents) / (1024 * 1024), 4)}MiB after {round(time.time() - start, 3)}")
+            return (
+                len(contents),
+                { "part_number": None, "etag": response["ETag"] },
+                None
+            )
+        except Exception as e:
+            print("ERROR", e)
+            return None, None, e
+
+    @staticmethod
     def write_part(contents, object_key, upload_id, part_number, bucket_name):
         try:
             contents = contents.replace(WINDOWS_LINE_ENDING, UNIX_LINE_ENDING)
@@ -362,7 +399,7 @@ class S3Dumper(DumperBase):
             return None, None, e
 
 
-    def async_write_part(self, stream, resource, part_number, object_key, upload_id, on_complete=None):
+    def async_write_part(self, stream, resource, part_number, object_key, upload_id, is_last):
         # A helper function to create a Process that does a part upload
         resource_name = resource.res.descriptor["name"]
         part_number += 1
@@ -371,22 +408,38 @@ class S3Dumper(DumperBase):
         contents = s.encode()
 
         if len(contents):
-
-            proc = self.pool.apply_async(
-                S3Dumper.write_part,
-                (
-                    contents,
-                    object_key,
-                    upload_id,
-                    part_number,
-                    self.bucket_name,
-                ),
-            )
+            if is_last and part_number == 1:
+                # Don't use multipart if the file size is less than 5MB
+                proc = self.pool.apply_async(
+                    S3Dumper.write_file,
+                    (
+                        contents,
+                        object_key,
+                        "text/csv",
+                        self.bucket_name,
+                    ),
+                )
+            else:
+                if part_number == 1:
+                    # Create multipart upload
+                    response = self.s3_client.create_multipart_upload(Bucket=self.bucket_name, Key=object_key, ContentType="text/csv")
+                    upload_id = response["UploadId"]
+                    self.procs[resource_name]["upload_id"] = upload_id
+                proc = self.pool.apply_async(
+                    S3Dumper.write_part,
+                    (
+                        contents,
+                        object_key,
+                        upload_id,
+                        part_number,
+                        self.bucket_name,
+                    ),
+                )
 
             self.procs[resource_name]["procs"].append(proc)
         stream.close()
         writer, stream = self.generate_writer(resource)
-        return part_number, writer, stream
+        return part_number, upload_id, writer, stream
 
 
     def rows_processor(self, resource, writer, stream):
@@ -419,6 +472,7 @@ class S3Dumper(DumperBase):
                 redis_conn.set(progress_key, REDIS_PROGRESS_SAVING_DONE_FLAG)
 
         row_number = None
+        upload_id = None
 
         writer_timer_sum = 0
         writer_timer_count = 0
@@ -434,10 +488,6 @@ class S3Dumper(DumperBase):
             start = time.time()
             timer = time.time()
 
-            # Create multipart upload
-            response = self.s3_client.create_multipart_upload(Bucket=self.bucket_name, Key=object_key, ContentType="text/csv")
-            upload_id = response["UploadId"]
-            self.procs[resource_name]["upload_id"] = upload_id
 
             for row in resource:
                 if process_timer is not None:
@@ -469,7 +519,7 @@ class S3Dumper(DumperBase):
                 redis_timer_sum += time.time() - redis_timer
                 redis_timer_count += 1
                 if row_number % 25 == 0 and stream.tell() > calculate_partsize(part_number):
-                    part_number, writer, stream = self.async_write_part(stream, resource, part_number, object_key, upload_id)
+                    part_number, upload_id, writer, stream = self.async_write_part(stream, resource, part_number, object_key, upload_id, False)
 
                 if redis_timer_count >= 1000:
                     # print(f"redis: {redis_timer_sum / redis_timer_count}")
@@ -489,7 +539,7 @@ class S3Dumper(DumperBase):
             row_number = None
             writer.finalize_file()
             # Upload final part
-            _, _, stream = self.async_write_part(stream, resource, part_number, object_key, upload_id, on_complete=on_complete)
+            _, _, _,  stream = self.async_write_part(stream, resource, part_number, object_key, upload_id, True)
 
             if redis_conn is not None:
                 redis_conn.set(progress_key, REDIS_PROGRESS_SAVING_START_FLAG)
