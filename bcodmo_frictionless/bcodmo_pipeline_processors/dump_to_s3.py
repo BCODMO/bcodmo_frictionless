@@ -10,7 +10,7 @@ import hashlib
 from dataflows import Flow
 from datapackage_pipelines.wrapper import ingest
 from datapackage_pipelines.utilities.flow_utils import spew_flow
-from billiard import Process, Queue
+from billiard import Process, Queue, Pool
 
 from dataflows.processors.dumpers.dumper_base import DumperBase
 from dataflows.processors.dumpers.file_formats import CSVFormat, JSONFormat
@@ -27,6 +27,26 @@ UNIX_LINE_ENDING = b"\n"
 
 WINDOWS_LINE_ENDING_STR = "\r\n"
 UNIX_LINE_ENDING_STR = "\n"
+
+
+
+MB = 1024 * 1024
+def calculate_partsize(num_parts_so_far):
+    # Ensures we stay with small part size when the file is small, but increase the part size as the file gets bigger
+    # This ensures up to 1TB of uplooad size
+    if num_parts_so_far < 25:
+        # First 25 parts of 5 MB
+        return MB * 7
+    if num_parts_so_far < 50:
+        # Next 25 parts are 10 MB
+        return MB *  10
+    if num_parts_so_far < 50:
+        # Next 25 parts are 25 MB
+        return MB * 25
+    if num_parts_so_far < 75:
+        # Next 25 parts are 50 MB
+        return MB * 50
+    return MB * 100
 
 
 def expand_scientific_notation(flt):
@@ -104,11 +124,8 @@ class S3Dumper(DumperBase):
         self.save_pipeline_spec = options.get("save_pipeline_spec", False)
         self.pipeline_spec = options.get("pipeline_spec", None)
         self.data_manager = options.get("data_manager", {})
-        self.procs = []
-        self.error_q = Queue()
-        self.error_q.put({})
-        self.filesize_q = Queue()
-        self.filesize_q.put({})
+        self.procs = {}
+        self.pool = Pool(threads=True)
 
         access_key = os.environ.get("AWS_ACCESS_KEY_ID")
         secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
@@ -120,9 +137,16 @@ class S3Dumper(DumperBase):
                 aws_secret_access_key=secret_access_key,
                 endpoint_url=host,
             )
+            self.s3_client = boto3.client(
+                "s3",
+                aws_access_key_id=access_key,
+                aws_secret_access_key=secret_access_key,
+                endpoint_url=host,
+            )
         else:
             logging.warn("Using base boto credentials for S3 Dumper")
             self.s3 = boto3.resource("s3")
+            self.s3_client = boto3.client("s3")
         if self.delete:
             s3_client = boto3.client(
                 "s3",
@@ -175,66 +199,61 @@ class S3Dumper(DumperBase):
 
         return datapackage
 
-    def write_file_to_output(
-        self,
-        contents,
-        path,
-        content_type,
-        on_complete=None,
-        error_q=None,
-        filesize_q=None,
-    ):
-        start = time.time()
-        try:
-            if path.startswith("."):
-                path = path[1:]
-            if path.startswith("/"):
-                path = path[1:]
-            obj_name = os.path.join(self.prefix, path)
-            contents = contents.replace(WINDOWS_LINE_ENDING, UNIX_LINE_ENDING)
-
-            start = time.time()
-            # print(f"Starting save file {time.time()}")
-            obj = self.s3.Object(self.bucket_name, obj_name)
-            obj.put(Body=contents, ContentType=content_type)
-            # print(f"Took {time.time() - start} to save the file ({path})")
-            if filesize_q is not None:
-                r = filesize_q.get()
-                r[path] = len(contents)
-                filesize_q.put(r)
-
-            if on_complete is not None:
-                on_complete()
-
-            print(f"Took {round(time.time() -start, 3)} to upload {path}")
-            return path, len(contents)
-
-        except Exception as e:
-            print("Got an error in write file to output!", e)
-            if error_q is not None:
-                r = error_q.get()
-                r[path] = e
-                error_q.put(r)
-
-            else:
-                raise e
-        return path, 0
 
     def handle_datapackage(self):
-        for proc in self.procs:
-            proc.join()
+        etags = {}
+        filesizes = {}
+        self.pool.close()
+        self.pool.join()
+        for resource_name, d in self.procs.items():
 
-        errors = self.error_q.get()
-        for e in errors.values():
-            raise e
+            upload_id = d["upload_id"]
+            procs = d["procs"]
+            object_key = d["object_key"]
+            parts = []
+            filesize = 0
+            for proc in procs:
+                partsize, part, err = proc.get()
+                if err is not None:
+                    raise err
+                parts.append(part)
+                filesize += partsize
 
-        filesizes = self.filesize_q.get()
-        for filesize in errors.values():
-            # Update filesize
+            parts.sort(key=lambda p: p["part_number"])
+            response = self.s3_client.complete_multipart_upload(
+                    Bucket=self.bucket_name,
+                    Key=object_key,
+                    UploadId=upload_id,
+                    MultipartUpload={
+                        'Parts': [{"ETag": p["etag"], "PartNumber": p["part_number"]} for p in parts]
+                    },
+            )
+            etags[resource_name] = response["ETag"]
+
+            filesizes[resource_name] = filesize
+
+
+
+
+
+        for resource_descriptor in self.datapackage.descriptor["resources"]:
+            resource_name = resource_descriptor["name"]
+            filesize = filesizes.get(resource_name, 0)
             DumperBase.inc_attr(
                 self.datapackage.descriptor, self.datapackage_bytes, filesize
             )
             DumperBase.inc_attr(resource_descriptor, self.resource_bytes, filesize)
+
+            etag = etags.get(resource_name, None)
+            if etag:
+                if self.add_filehash_to_path:
+                    DumperBase.insert_hash_in_path(
+                        resource_descriptor,
+                        etag
+                    )
+                DumperBase.set_attr(
+                    resource_descriptor, self.resource_hash, etag,
+                )
 
         if self.save_pipeline_spec and self.pipeline_spec:
             # self from pipeline_spec inputted
@@ -279,10 +298,113 @@ class S3Dumper(DumperBase):
 
         super(S3Dumper, self).handle_datapackage()
 
+    def write_file_to_output(
+        self,
+        contents,
+        path,
+        content_type,
+
+    ):
+        start = time.time()
+        if path.startswith("."):
+            path = path[1:]
+        if path.startswith("/"):
+            path = path[1:]
+        obj_name = os.path.join(self.prefix, path)
+        contents = contents.replace(WINDOWS_LINE_ENDING, UNIX_LINE_ENDING)
+
+        start = time.time()
+        obj = self.s3.Object(self.bucket_name, obj_name)
+        obj.put(Body=contents, ContentType=content_type)
+
+        print(f"Took {round(time.time() -start, 3)} to upload {path}")
+        return path, len(contents)
+
+    @staticmethod
+    def write_part(contents, object_key, upload_id, part_number, bucket_name):
+        try:
+            contents = contents.replace(WINDOWS_LINE_ENDING, UNIX_LINE_ENDING)
+
+            # We create our own client for this part, because it seems to be faster
+            access_key = os.environ.get("AWS_ACCESS_KEY_ID")
+            secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+            host = os.environ.get("LAMINAR_S3_HOST")
+            if access_key and host and secret_access_key:
+                s3_client = boto3.client(
+                    "s3",
+                    aws_access_key_id=access_key,
+                    aws_secret_access_key=secret_access_key,
+                    endpoint_url=host,
+
+                )
+            else:
+                s3_client = boto3.client(
+                    "s3",
+                )
+
+            start = time.time()
+            response = s3_client.upload_part(
+                    Body=contents,
+                    Bucket=bucket_name,
+                    Key=object_key,
+                    UploadId=upload_id,
+                    PartNumber=part_number,
+
+            )
+            print(f"Completed uploading part of size {round(len(contents) / (1024 * 1024), 4)}MiB after {round(time.time() - start, 3)}")
+            return (
+                len(contents),
+                { "part_number": part_number, "etag": response["ETag"] },
+                None
+            )
+        except Exception as e:
+            print("ERROR", e)
+            return None, None, e
+
+
+    def async_write_part(self, stream, resource, part_number, object_key, upload_id, on_complete=None):
+        # A helper function to create a Process that does a part upload
+        resource_name = resource.res.descriptor["name"]
+        part_number += 1
+        stream.seek(0)
+        s = stream.read()
+        contents = s.encode()
+
+        if len(contents):
+
+            proc = self.pool.apply_async(
+                S3Dumper.write_part,
+                (
+                    contents,
+                    object_key,
+                    upload_id,
+                    part_number,
+                    self.bucket_name,
+                ),
+            )
+
+            self.procs[resource_name]["procs"].append(proc)
+        stream.close()
+        writer, stream = self.generate_writer(resource)
+        return part_number, writer, stream
+
+
     def rows_processor(self, resource, writer, stream):
+        resource_name = resource.res.descriptor["name"]
+
+
+        path = resource.res.source
+        if path.startswith("."):
+            path = path[1:]
+        if path.startswith("/"):
+            path = path[1:]
+        object_key = os.path.join(self.prefix, path)
+
+        self.procs[resource_name] = { "upload_id": None, "object_key": object_key, "procs": [] }
+
+
         redis_conn = None
         progress_key = None
-        resource_name = resource.res.descriptor["name"]
         if self.cache_id:
             redis_conn = get_redis_connection()
             redis_conn.sadd(
@@ -292,24 +414,31 @@ class S3Dumper(DumperBase):
 
             progress_key = get_redis_progress_key(resource_name, self.cache_id)
 
+        def on_complete():
+            if redis_conn is not None:
+                redis_conn.set(progress_key, REDIS_PROGRESS_SAVING_DONE_FLAG)
+
         row_number = None
-        # print(f"Received at {time.time()}")
-        start1 = time.time()
 
         writer_timer_sum = 0
         writer_timer_count = 0
-
         process_timer_sum = 0
         process_timer_count = 0
         process_timer = None
-
         redis_timer_sum = 0
         redis_timer_count = 0
 
         try:
             row_number = 0
+            part_number = 0
             start = time.time()
             timer = time.time()
+
+            # Create multipart upload
+            response = self.s3_client.create_multipart_upload(Bucket=self.bucket_name, Key=object_key, ContentType="text/csv")
+            upload_id = response["UploadId"]
+            self.procs[resource_name]["upload_id"] = upload_id
+
             for row in resource:
                 if process_timer is not None:
                     process_timer_sum += time.time() - process_timer
@@ -339,6 +468,9 @@ class S3Dumper(DumperBase):
                     timer = time.time()
                 redis_timer_sum += time.time() - redis_timer
                 redis_timer_count += 1
+                if row_number % 25 == 0 and stream.tell() > calculate_partsize(part_number):
+                    part_number, writer, stream = self.async_write_part(stream, resource, part_number, object_key, upload_id)
+
                 if redis_timer_count >= 1000:
                     # print(f"redis: {redis_timer_sum / redis_timer_count}")
                     redis_timer_count = 0
@@ -348,64 +480,19 @@ class S3Dumper(DumperBase):
 
                 if self.limit_yield is None or self.limit_yield < 0 or row_number <= self.limit_yield:
                     yield row
+            # Set row number values
+            DumperBase.inc_attr(self.datapackage.descriptor, self.datapackage_rowcount, row_number)
+            DumperBase.inc_attr(resource.res.descriptor, self.resource_rowcount, row_number)
+            resource.res.commit()
+            self.datapackage.commit()
+
             row_number = None
             writer.finalize_file()
+            # Upload final part
+            _, _, stream = self.async_write_part(stream, resource, part_number, object_key, upload_id, on_complete=on_complete)
+
             if redis_conn is not None:
                 redis_conn.set(progress_key, REDIS_PROGRESS_SAVING_START_FLAG)
-            # print(
-            #    f"Finished going through loop at {time.time()}, in {time.time() - start1}"
-            # )
-
-            # Get resource descriptor
-            resource_descriptor = resource.res.descriptor
-            for descriptor in self.datapackage.descriptor["resources"]:
-                if descriptor["name"] == resource_name:
-                    resource_descriptor = descriptor
-
-            # File Hash:
-            if self.resource_hash:
-                hasher = S3Dumper.hash_handler(stream)
-                # Update path with hash
-                if self.add_filehash_to_path:
-                    DumperBase.insert_hash_in_path(
-                        resource_descriptor, hasher.hexdigest()
-                    )
-                DumperBase.set_attr(
-                    resource_descriptor, self.resource_hash, hasher.hexdigest()
-                )
-            # print(f"After hash, starting to write file at {time.time()}")
-
-            # Finalise
-            stream.seek(0)
-            if len(self.datapackage.descriptor["resources"]) > 1:
-                # Multiprocess if we're downloading multiple
-                def on_complete():
-                    if redis_conn is not None:
-                        redis_conn.set(progress_key, REDIS_PROGRESS_SAVING_DONE_FLAG)
-
-                proc = Process(
-                    target=self.write_file_to_output,
-                    args=(
-                        stream.read().encode(),
-                        resource.res.source,
-                        "text/csv",
-                    ),
-                    kwargs={
-                        "on_complete": on_complete,
-                        "error_q": self.error_q,
-                        "filesize_q": self.filesize_q,
-                    },
-                )
-                self.procs.append(proc)
-                proc.start()
-            else:
-                self.write_file_to_output(
-                    stream.read().encode(),
-                    resource.res.source,
-                    "text/csv",
-                    error_q=self.error_q,
-                    filesize_q=self.filesize_q,
-                )
 
             stream.close()
         except Exception as e:
@@ -420,36 +507,27 @@ class S3Dumper(DumperBase):
                 ) + e.args[1:]
             raise e
 
+    def generate_writer(self, resource):
+        schema = resource.res.schema
+        stream = io.StringIO()
+        writer_kwargs = {"use_titles": True} if self.use_titles else {}
+        writer_kwargs["temporal_format_property"] = self.temporal_format_property
+        writer = self.file_formatters[resource.res.name](
+            stream, schema, **writer_kwargs
+        )
+        return writer, stream
+
+
     def process_resource(self, resource):
         if resource.res.name in self.file_formatters:
-            schema = resource.res.schema
 
-            stream = io.StringIO()
-            writer_kwargs = {"use_titles": True} if self.use_titles else {}
-            writer_kwargs["temporal_format_property"] = self.temporal_format_property
-            writer = self.file_formatters[resource.res.name](
-                stream, schema, **writer_kwargs
-            )
-
+            writer, stream = self.generate_writer(resource)
             return self.rows_processor(resource, writer, stream)
         else:
             return resource
 
-    @staticmethod
-    def hash_handler(tfile):
-        tfile.seek(0)
-        hasher = hashlib.md5()
-        data = tfile.read(1024)
-        while len(data) > 0:
-            if isinstance(data, str):
-                data = data.replace(WINDOWS_LINE_ENDING_STR, UNIX_LINE_ENDING_STR)
-                hasher.update(data.encode("utf8"))
-            elif isinstance(data, bytes):
-                data = data.replace(WINDOWS_LINE_ENDING, UNIX_LINE_ENDING)
-                hasher.update(data)
-            data = tfile.read(1024)
-        return hasher
-
+    def row_counter(self, resource, iterator):
+        return iterator
 
 def flow(parameters):
     return Flow(
