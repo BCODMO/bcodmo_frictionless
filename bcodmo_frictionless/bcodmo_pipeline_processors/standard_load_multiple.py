@@ -1,6 +1,6 @@
 from dataflows import load as standard_load
 
-from billiard import Process, Queue
+from billiard import Pool
 from datapackage import Package
 import time
 from tabulator import Stream
@@ -14,17 +14,14 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.loaders import (
 )
 
 
-def _preload_data(load_source, mode, loader, data_q, encoding_q):
-    start = time.time()
-    chars = loader.load(load_source, mode=mode)
+def _preload_data(load_source, mode, loader, loader_options):
+    try:
+        loader_obj = loader(**loader_options)
+        chars = loader_obj.load(load_source, mode=mode)
 
-    r = data_q.get()
-    r[load_source] = chars.read()
-    data_q.put(r)
-
-    r = encoding_q.get()
-    r[load_source] = loader.encoding
-    encoding_q.put(r)
+        return chars.read(), loader_obj.encoding, None
+    except Exception as e:
+        return None, None, e
 
 
 def get_mode(_format):
@@ -60,51 +57,45 @@ class standard_load_multiple(standard_load):
             del self.options["sheet"]
 
     def process_datapackage(self, dp: Package):
-        preloaded_data = {}
-        encodings = {}
+        results = {}
 
         # Only do preloaded data for bcodmo-aws loader
         if (
             self.options.get("scheme", None) == "bcodmo-aws"
             and len(self.load_sources) > 1
         ):
-            procs = []
-            data_q = Queue()
-            data_q.put({})
-            encoding_q = Queue()
-            encoding_q.put({})
 
-            # Keep track of which sources we've already loaded.
-            loaded_sources = {}
+            procs = {}
+            pool = Pool(threads=True)
 
             for i, load_source in enumerate(self.load_sources):
-                if load_source not in loaded_sources:
+                if load_source not in procs:
                     self._set_individual(i)
                     self.options["loader_resource_name"] = self.names[i]
                     mode = get_mode(self.options.get("format"))
 
                     loader_options = extract_options(self.options, BcodmoAWS.options)
 
-                    proc = Process(
-                        target=_preload_data,
-                        args=(
+                    proc = pool.apply_async(
+                        _preload_data,
+                        (
                             load_source,
                             mode,
-                            BcodmoAWS(**loader_options),
-                            data_q,
-                            encoding_q,
+                            BcodmoAWS,
+                            loader_options
                         ),
                     )
-                    procs.append(proc)
-                    proc.start()
+                    procs[load_source] = proc
 
-                    loaded_sources[load_source] = True
 
-            for proc in procs:
-                proc.join()
+            pool.close()
+            pool.join()
+            for load_source, proc in procs.items():
+                data, encoding, err = proc.get()
+                if err is not None:
+                    raise err
+                results[load_source] = { "data": data, "encoding": encoding }
 
-            preloaded_data = data_q.get()
-            encodings = encoding_q.get()
 
         for i, load_source in enumerate(self.load_sources):
             # Set the proper variables for this individual resource
@@ -112,9 +103,10 @@ class standard_load_multiple(standard_load):
             self._set_individual(i)
             self.options["loader_resource_name"] = self.names[i]
 
-            if load_source in preloaded_data:
-                chars_s = preloaded_data[load_source]
-                encoding = encodings[load_source]
+            if load_source in results:
+                chars_s = results[load_source]["data"]
+                encoding = results[load_source]["encoding"]
+
                 mode = get_mode(self.options.get("format"))
                 if mode == "b":
                     self.preloaded_chars = io.BufferedRandom(io.BytesIO(chars_s))
