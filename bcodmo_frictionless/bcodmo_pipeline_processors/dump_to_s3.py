@@ -201,11 +201,18 @@ class S3Dumper(DumperBase):
 
 
     def handle_datapackage(self):
+
         etags = {}
         filesizes = {}
         self.pool.close()
         self.pool.join()
         for resource_name, d in self.procs.items():
+            redis_conn = None
+            progress_key = None
+            if self.cache_id:
+                redis_conn = get_redis_connection()
+                progress_key = get_redis_progress_key(resource_name, self.cache_id)
+
 
             upload_id = d["upload_id"]
             procs = d["procs"]
@@ -216,7 +223,7 @@ class S3Dumper(DumperBase):
             for proc in procs:
                 partsize, part, err = proc.get()
                 if err is not None:
-                    raise err
+                    return self._handle_exception(err, resource_name)
                 parts.append(part)
                 filesize += partsize
 
@@ -236,6 +243,9 @@ class S3Dumper(DumperBase):
                 etags[resource_name] = parts[0]["etag"]
 
             filesizes[resource_name] = filesize
+
+            if redis_conn is not None:
+                redis_conn.set(progress_key, REDIS_PROGRESS_SAVING_DONE_FLAG)
 
 
 
@@ -441,6 +451,19 @@ class S3Dumper(DumperBase):
         writer, stream = self.generate_writer(resource)
         return part_number, upload_id, writer, stream
 
+    def _handle_exception(self, e, resource_name, row_number=None):
+        row_number_text = ""
+        if row_number is not None:
+            row_number_text = f" - occured at line # {row_number + 1}"
+
+        if len(e.args) >= 1:
+            e.args = (
+                e.args[0]
+                + f"\n\nOccured at resource {resource_name}{row_number_text} in the dump_to_s3 processor",
+            ) + e.args[1:]
+        raise e
+
+
 
     def rows_processor(self, resource, writer, stream):
         resource_name = resource.res.descriptor["name"]
@@ -467,9 +490,6 @@ class S3Dumper(DumperBase):
 
             progress_key = get_redis_progress_key(resource_name, self.cache_id)
 
-        def on_complete():
-            if redis_conn is not None:
-                redis_conn.set(progress_key, REDIS_PROGRESS_SAVING_DONE_FLAG)
 
         row_number = None
         upload_id = None
@@ -546,16 +566,7 @@ class S3Dumper(DumperBase):
 
             stream.close()
         except Exception as e:
-            row_number_text = ""
-            if row_number is not None:
-                row_number_text = f" - occured at line # {row_number + 1}"
-
-            if len(e.args) >= 1:
-                e.args = (
-                    e.args[0]
-                    + f"\n\nOccured at resource {resource.res.descriptor['name']}{row_number_text}",
-                ) + e.args[1:]
-            raise e
+            return self._handle_exception(e, resource_name, row_number=row_number)
 
     def generate_writer(self, resource):
         schema = resource.res.schema
