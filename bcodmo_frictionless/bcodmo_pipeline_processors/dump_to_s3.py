@@ -1,3 +1,4 @@
+import csv
 import os
 import json
 import io
@@ -13,7 +14,7 @@ from datapackage_pipelines.utilities.flow_utils import spew_flow
 from billiard import Process, Queue, Pool
 
 from dataflows.processors.dumpers.dumper_base import DumperBase
-from dataflows.processors.dumpers.file_formats import CSVFormat, JSONFormat
+from dataflows.processors.dumpers.file_formats import CSVFormat, JSONFormat, FileFormat
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
     get_redis_progress_key,
     get_redis_progress_resource_key,
@@ -29,8 +30,9 @@ WINDOWS_LINE_ENDING_STR = "\r\n"
 UNIX_LINE_ENDING_STR = "\n"
 
 
-
 MB = 1024 * 1024
+
+
 def calculate_partsize(num_parts_so_far):
     # Ensures we stay with small part size when the file is small, but increase the part size as the file gets bigger
     # This ensures up to 1TB of uplooad size
@@ -39,11 +41,11 @@ def calculate_partsize(num_parts_so_far):
         return MB * 7
     if num_parts_so_far < 50:
         # Next 25 parts are 10 MB
-        return MB *  10
-    if num_parts_so_far < 50:
+        return MB * 10
+    if num_parts_so_far < 75:
         # Next 25 parts are 25 MB
         return MB * 25
-    if num_parts_so_far < 75:
+    if num_parts_so_far < 100:
         # Next 25 parts are 50 MB
         return MB * 50
     return MB * 100
@@ -87,13 +89,27 @@ def num_to_scientific_notation(num):
 
 class CustomCSVFormat(CSVFormat):
     # A custom CSVFormat that allows use to customize the serializer for decimal
+    # and also not write the header if we so choose
 
     SERIALIZERS = {**CSVFormat.SERIALIZERS, **{"number": num_to_string}}
 
-    def __init__(self, file, schema, use_titles=False, **options):
-        super(CustomCSVFormat, self).__init__(
-            file, schema, use_titles=use_titles, **options
-        )
+    def __init__(self, file, schema, write_header=True, use_titles=False, **options):
+        headers = [f.name for f in schema.fields]
+        if use_titles:
+            titles = [f.descriptor.get("title", f.name) for f in schema.fields]
+            csv_writer = CsvTitlesDictWriter(file, headers, fieldtitles=titles)
+        else:
+            csv_writer = csv.DictWriter(file, headers)
+        # We can leave out write header
+
+        if write_header:
+            csv_writer.writeheader()
+
+        FileFormat.__init__(self, csv_writer, schema, **options)
+
+        # super(CustomCSVFormat, self).__init__(
+        #    file, schema, use_titles=use_titles, **options
+        # )
 
         for field in schema.fields:
             # support scientific notation
@@ -199,9 +215,7 @@ class S3Dumper(DumperBase):
 
         return datapackage
 
-
     def handle_datapackage(self):
-
         etags = {}
         filesizes = {}
         self.pool.close()
@@ -212,7 +226,6 @@ class S3Dumper(DumperBase):
             if self.cache_id:
                 redis_conn = get_redis_connection()
                 progress_key = get_redis_progress_key(resource_name, self.cache_id)
-
 
             upload_id = d["upload_id"]
             procs = d["procs"]
@@ -231,12 +244,15 @@ class S3Dumper(DumperBase):
             if is_multipart:
                 parts.sort(key=lambda p: p["part_number"])
                 response = self.s3_client.complete_multipart_upload(
-                        Bucket=self.bucket_name,
-                        Key=object_key,
-                        UploadId=upload_id,
-                        MultipartUpload={
-                            'Parts': [{"ETag": p["etag"], "PartNumber": p["part_number"]} for p in parts]
-                        },
+                    Bucket=self.bucket_name,
+                    Key=object_key,
+                    UploadId=upload_id,
+                    MultipartUpload={
+                        "Parts": [
+                            {"ETag": p["etag"], "PartNumber": p["part_number"]}
+                            for p in parts
+                        ]
+                    },
                 )
                 etags[resource_name] = response["ETag"]
             else:
@@ -246,11 +262,6 @@ class S3Dumper(DumperBase):
 
             if redis_conn is not None:
                 redis_conn.set(progress_key, REDIS_PROGRESS_SAVING_DONE_FLAG)
-
-
-
-
-
 
         for resource_descriptor in self.datapackage.descriptor["resources"]:
             resource_name = resource_descriptor["name"]
@@ -263,12 +274,11 @@ class S3Dumper(DumperBase):
             etag = etags.get(resource_name, None)
             if etag:
                 if self.add_filehash_to_path:
-                    DumperBase.insert_hash_in_path(
-                        resource_descriptor,
-                        etag
-                    )
+                    DumperBase.insert_hash_in_path(resource_descriptor, etag)
                 DumperBase.set_attr(
-                    resource_descriptor, self.resource_hash, etag,
+                    resource_descriptor,
+                    self.resource_hash,
+                    etag,
                 )
 
         if self.save_pipeline_spec and self.pipeline_spec:
@@ -319,7 +329,6 @@ class S3Dumper(DumperBase):
         contents,
         path,
         content_type,
-
     ):
         start = time.time()
         if path.startswith("."):
@@ -357,11 +366,13 @@ class S3Dumper(DumperBase):
                 s3 = boto3.resource("s3")
             obj = s3.Object(bucket_name, object_key)
             response = obj.put(Body=contents, ContentType=content_type)
-            print(f"Completed uploading file of size {round(len(contents) / (1024 * 1024), 4)}MiB after {round(time.time() - start, 3)}")
+            print(
+                f"Completed uploading file of size {round(len(contents) / (1024 * 1024), 4)}MiB after {round(time.time() - start, 3)}"
+            )
             return (
                 len(contents),
-                { "part_number": None, "etag": response["ETag"] },
-                None
+                {"part_number": None, "etag": response["ETag"]},
+                None,
             )
         except Exception as e:
             print("ERROR", e)
@@ -382,7 +393,6 @@ class S3Dumper(DumperBase):
                     aws_access_key_id=access_key,
                     aws_secret_access_key=secret_access_key,
                     endpoint_url=host,
-
                 )
             else:
                 s3_client = boto3.client(
@@ -391,25 +401,27 @@ class S3Dumper(DumperBase):
 
             start = time.time()
             response = s3_client.upload_part(
-                    Body=contents,
-                    Bucket=bucket_name,
-                    Key=object_key,
-                    UploadId=upload_id,
-                    PartNumber=part_number,
-
+                Body=contents,
+                Bucket=bucket_name,
+                Key=object_key,
+                UploadId=upload_id,
+                PartNumber=part_number,
             )
-            print(f"Completed uploading part of size {round(len(contents) / (1024 * 1024), 4)}MiB after {round(time.time() - start, 3)}")
+            print(
+                f"Completed uploading part of size {round(len(contents) / (1024 * 1024), 4)}MiB after {round(time.time() - start, 3)}"
+            )
             return (
                 len(contents),
-                { "part_number": part_number, "etag": response["ETag"] },
-                None
+                {"part_number": part_number, "etag": response["ETag"]},
+                None,
             )
         except Exception as e:
             print("ERROR", e)
             return None, None, e
 
-
-    def async_write_part(self, stream, resource, part_number, object_key, upload_id, is_last):
+    def async_write_part(
+        self, stream, resource, part_number, object_key, upload_id, is_last
+    ):
         # A helper function to create a Process that does a part upload
         resource_name = resource.res.descriptor["name"]
         part_number += 1
@@ -432,7 +444,9 @@ class S3Dumper(DumperBase):
             else:
                 if part_number == 1:
                     # Create multipart upload
-                    response = self.s3_client.create_multipart_upload(Bucket=self.bucket_name, Key=object_key, ContentType="text/csv")
+                    response = self.s3_client.create_multipart_upload(
+                        Bucket=self.bucket_name, Key=object_key, ContentType="text/csv"
+                    )
                     upload_id = response["UploadId"]
                     self.procs[resource_name]["upload_id"] = upload_id
                 proc = self.pool.apply_async(
@@ -448,7 +462,7 @@ class S3Dumper(DumperBase):
 
             self.procs[resource_name]["procs"].append(proc)
         stream.close()
-        writer, stream = self.generate_writer(resource)
+        writer, stream = self.generate_writer(resource, write_header=False)
         return part_number, upload_id, writer, stream
 
     def _handle_exception(self, e, resource_name, row_number=None):
@@ -463,11 +477,8 @@ class S3Dumper(DumperBase):
             ) + e.args[1:]
         raise e
 
-
-
     def rows_processor(self, resource, writer, stream):
         resource_name = resource.res.descriptor["name"]
-
 
         path = resource.res.source
         if path.startswith("."):
@@ -476,8 +487,11 @@ class S3Dumper(DumperBase):
             path = path[1:]
         object_key = os.path.join(self.prefix, path)
 
-        self.procs[resource_name] = { "upload_id": None, "object_key": object_key, "procs": [] }
-
+        self.procs[resource_name] = {
+            "upload_id": None,
+            "object_key": object_key,
+            "procs": [],
+        }
 
         redis_conn = None
         progress_key = None
@@ -490,17 +504,14 @@ class S3Dumper(DumperBase):
 
             progress_key = get_redis_progress_key(resource_name, self.cache_id)
 
-
         row_number = None
         upload_id = None
 
         writer_timer_sum = 0
-        writer_timer_count = 0
         process_timer_sum = 0
         process_timer_count = 0
         process_timer = None
         redis_timer_sum = 0
-        redis_timer_count = 0
 
         try:
             row_number = 0
@@ -508,58 +519,67 @@ class S3Dumper(DumperBase):
             start = time.time()
             timer = time.time()
 
-
+            yield_start = time.time()
+            yield_total = 0
+            async_total = 0
+            loop_total = 0
             for row in resource:
-                if process_timer is not None:
-                    process_timer_sum += time.time() - process_timer
-                    process_timer_count += 1
-                if process_timer_count >= 1000:
-                    # print(f"process: {process_timer_sum / process_timer_count}")
-                    process_timer_count = 0
-                    process_timer_sum = 0
+                loop_total += time.time() - yield_start
 
                 row_number += 1
-                # if row_number < 200:
+
                 writer_timer = time.time()
-
                 writer.write_row(row)
-
                 writer_timer_sum += time.time() - writer_timer
-                writer_timer_count += 1
-                if writer_timer_count >= 1000:
-                    # print(f"write: {writer_timer_sum / writer_timer_count}")
-                    writer_timer_count = 0
-                    writer_timer_sum = 0
 
                 redis_timer = time.time()
-
                 if redis_conn is not None and time.time() - timer > 0.75:
                     redis_conn.set(progress_key, row_number)
                     timer = time.time()
                 redis_timer_sum += time.time() - redis_timer
-                redis_timer_count += 1
-                if row_number % 25 == 0 and stream.tell() > calculate_partsize(part_number):
-                    part_number, upload_id, writer, stream = self.async_write_part(stream, resource, part_number, object_key, upload_id, False)
 
-                if redis_timer_count >= 1000:
-                    # print(f"redis: {redis_timer_sum / redis_timer_count}")
-                    redis_timer_count = 0
+                async_start = time.time()
+                if row_number % 25 == 0 and stream.tell() > calculate_partsize(
+                    part_number
+                ):
+                    part_number, upload_id, writer, stream = self.async_write_part(
+                        stream, resource, part_number, object_key, upload_id, False
+                    )
+                async_total += time.time() - async_start
+
+                yield_total += time.time() - yield_start
+                if (row_number + 1) % 10000 == 0:
+                    # print(
+                    #    f"total {yield_total}. async {async_total}. redis {redis_timer_sum}. writer {writer_timer_sum}. loop {loop_total}"
+                    # )
+                    yield_total = 0
+                    async_total = 0
                     redis_timer_sum = 0
-
-                process_timer = time.time()
-
-                if self.limit_yield is None or self.limit_yield < 0 or row_number <= self.limit_yield:
+                    writer_timer_sum = 0
+                    loop_total = 0
+                if (
+                    self.limit_yield is None
+                    or self.limit_yield < 0
+                    or row_number <= self.limit_yield
+                ):
                     yield row
+                yield_start = time.time()
             # Set row number values
-            DumperBase.inc_attr(self.datapackage.descriptor, self.datapackage_rowcount, row_number)
-            DumperBase.inc_attr(resource.res.descriptor, self.resource_rowcount, row_number)
+            DumperBase.inc_attr(
+                self.datapackage.descriptor, self.datapackage_rowcount, row_number
+            )
+            DumperBase.inc_attr(
+                resource.res.descriptor, self.resource_rowcount, row_number
+            )
             resource.res.commit()
             self.datapackage.commit()
 
             row_number = None
             writer.finalize_file()
             # Upload final part
-            _, _, _,  stream = self.async_write_part(stream, resource, part_number, object_key, upload_id, True)
+            _, _, _, stream = self.async_write_part(
+                stream, resource, part_number, object_key, upload_id, True
+            )
 
             if redis_conn is not None:
                 redis_conn.set(progress_key, REDIS_PROGRESS_SAVING_START_FLAG)
@@ -568,20 +588,19 @@ class S3Dumper(DumperBase):
         except Exception as e:
             return self._handle_exception(e, resource_name, row_number=row_number)
 
-    def generate_writer(self, resource):
+    def generate_writer(self, resource, write_header=True):
         schema = resource.res.schema
         stream = io.StringIO()
         writer_kwargs = {"use_titles": True} if self.use_titles else {}
         writer_kwargs["temporal_format_property"] = self.temporal_format_property
         writer = self.file_formatters[resource.res.name](
-            stream, schema, **writer_kwargs
+            stream, schema, write_header=write_header, **writer_kwargs
         )
-        return writer, stream
 
+        return writer, stream
 
     def process_resource(self, resource):
         if resource.res.name in self.file_formatters:
-
             writer, stream = self.generate_writer(resource)
             return self.rows_processor(resource, writer, stream)
         else:
@@ -589,6 +608,7 @@ class S3Dumper(DumperBase):
 
     def row_counter(self, resource, iterator):
         return iterator
+
 
 def flow(parameters):
     return Flow(

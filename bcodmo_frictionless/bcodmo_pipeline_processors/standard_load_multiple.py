@@ -64,7 +64,6 @@ class standard_load_multiple(standard_load):
             self.options.get("scheme", None) == "bcodmo-aws"
             and len(self.load_sources) > 1
         ):
-
             procs = {}
             pool = Pool(threads=True)
 
@@ -78,15 +77,9 @@ class standard_load_multiple(standard_load):
 
                     proc = pool.apply_async(
                         _preload_data,
-                        (
-                            load_source,
-                            mode,
-                            BcodmoAWS,
-                            loader_options
-                        ),
+                        (load_source, mode, BcodmoAWS, loader_options),
                     )
                     procs[load_source] = proc
-
 
             pool.close()
             pool.join()
@@ -94,8 +87,7 @@ class standard_load_multiple(standard_load):
                 data, encoding, err = proc.get()
                 if err is not None:
                     raise err
-                results[load_source] = { "data": data, "encoding": encoding }
-
+                results[load_source] = {"data": data, "encoding": encoding}
 
         for i, load_source in enumerate(self.load_sources):
             # Set the proper variables for this individual resource
