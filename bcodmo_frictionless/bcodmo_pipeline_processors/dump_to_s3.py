@@ -162,18 +162,22 @@ class S3Dumper(DumperBase):
                 aws_secret_access_key=secret_access_key,
                 endpoint_url=host,
             )
+        elif host:
+            self.s3 = boto3.resource(
+                "s3",
+                endpoint_url=host,
+            )
+            self.s3_client = boto3.client(
+                "s3",
+                endpoint_url=host,
+            )
+
         else:
             logging.warn("Using base boto credentials for S3 Dumper")
             self.s3 = boto3.resource("s3")
             self.s3_client = boto3.client("s3")
         if self.delete:
-            s3_client = boto3.client(
-                "s3",
-                aws_access_key_id=access_key,
-                aws_secret_access_key=secret_access_key,
-                endpoint_url=host,
-            )
-            res = s3_client.list_objects_v2(
+            res = self.s3_client.list_objects_v2(
                 Bucket=self.bucket_name,
                 Prefix=self.prefix,
             )
@@ -183,7 +187,7 @@ class S3Dumper(DumperBase):
                     raise Exception(
                         f"Throwing an error from the dump_to_s3 processor because the number of files to be deleted was more than 10. This is a safety measure to ensure we don't accidently more files than expected."
                     )
-                s3_client.delete_objects(
+                self.s3_client.delete_objects(
                     Bucket=self.bucket_name,
                     Delete={"Objects": [{"Key": obj["Key"]} for obj in contents]},
                 )
