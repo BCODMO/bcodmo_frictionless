@@ -278,6 +278,7 @@ class S3Dumper(DumperBase):
 
             etag = etags.get(resource_name, None)
             if etag:
+                etag = etag.strip('"')
                 if self.add_filehash_to_path:
                     DumperBase.insert_hash_in_path(resource_descriptor, etag)
                 DumperBase.set_attr(
