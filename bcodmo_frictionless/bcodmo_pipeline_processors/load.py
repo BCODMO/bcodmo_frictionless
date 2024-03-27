@@ -22,6 +22,7 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
     get_redis_progress_resource_key,
     get_redis_connection,
     REDIS_PROGRESS_INIT_FLAG,
+    REDIS_EXPIRES,
 )
 
 # Import custom parsers here
@@ -341,13 +342,16 @@ def load(_from, parameters):
         redis_conn = get_redis_connection()
         if redis_conn is not None:
             for resource_name in resource_names:
+                redis_key = get_redis_progress_resource_key(_cache_id)
                 redis_conn.sadd(
-                    get_redis_progress_resource_key(_cache_id),
+                    redis_key,
                     resource_name,
                 )
+                redis_conn.expire(redis_key, REDIS_EXPIRES)
                 redis_conn.set(
                     get_redis_progress_key(resource_name, _cache_id),
                     REDIS_PROGRESS_INIT_FLAG,
+                    ex=REDIS_EXPIRES,
                 )
 
     params.extend(

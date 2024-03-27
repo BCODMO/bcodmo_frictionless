@@ -15,11 +15,23 @@ def get_redis_connection():
 
 
 def get_redis_progress_key(resource, cache_id):
+    # A flag for where in the pipeline we are
     return f"{cache_id}-{resource}-progress"
 
 
 def get_redis_progress_resource_key(cache_id):
+    # A list of all of the resources
     return f"{cache_id}-resources"
+
+
+def get_redis_progress_num_parts_key(resource, cache_id):
+    # The total number of parts to be uploaded
+    return f"{cache_id}-{resource}-num-parts"
+
+
+def get_redis_progress_parts_key(resource, cache_id):
+    # A list of parts that have been succesfully uploaded
+    return f"{cache_id}-{resource}-parts"
 
 
 REDIS_PROGRESS_INIT_FLAG = -1
@@ -28,3 +40,6 @@ REDIS_PROGRESS_LOADING_DONE_FLAG = -3
 REDIS_PROGRESS_SAVING_START_FLAG = -4
 REDIS_PROGRESS_SAVING_DONE_FLAG = -5
 REDIS_PROGRESS_DELETED_FLAG = -6
+
+# 1 week expiration
+REDIS_EXPIRES = 60 * 60 * 24 * 7

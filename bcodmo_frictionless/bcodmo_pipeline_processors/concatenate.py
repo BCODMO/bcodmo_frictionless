@@ -14,6 +14,7 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
     get_redis_connection,
     get_redis_progress_resource_key,
     REDIS_PROGRESS_DELETED_FLAG,
+    REDIS_EXPIRES,
 )
 
 
@@ -159,7 +160,9 @@ def concatenate(
                     num_concatenated += 1
                     if redis_conn is not None:
                         progress_key = get_redis_progress_key(name, cache_id)
-                        redis_conn.set(progress_key, REDIS_PROGRESS_DELETED_FLAG)
+                        redis_conn.set(
+                            progress_key, REDIS_PROGRESS_DELETED_FLAG, ex=REDIS_EXPIRES
+                        )
 
                 else:
                     new_resources.append(resource)
@@ -178,16 +181,20 @@ def concatenate(
                     num_concatenated += 1
                     if redis_conn is not None:
                         progress_key = get_redis_progress_key(name, cache_id)
-                        redis_conn.set(progress_key, REDIS_PROGRESS_DELETED_FLAG)
+                        redis_conn.set(
+                            progress_key, REDIS_PROGRESS_DELETED_FLAG, ex=REDIS_EXPIRES
+                        )
 
         if not suffix:
             new_resources.append(target)
 
         if redis_conn is not None:
+            redis_key = get_redis_progress_resource_key(cache_id)
             redis_conn.sadd(
-                get_redis_progress_resource_key(cache_id),
+                redis_key,
                 target["name"],
             )
+            redis_conn.expire(redis_key, REDIS_EXPIRES)
         package.pkg.descriptor["resources"] = new_resources
         yield package.pkg
 

@@ -18,9 +18,12 @@ from dataflows.processors.dumpers.file_formats import CSVFormat, JSONFormat, Fil
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
     get_redis_progress_key,
     get_redis_progress_resource_key,
+    get_redis_progress_num_parts_key,
+    get_redis_progress_parts_key,
     get_redis_connection,
     REDIS_PROGRESS_SAVING_START_FLAG,
     REDIS_PROGRESS_SAVING_DONE_FLAG,
+    REDIS_EXPIRES,
 )
 
 WINDOWS_LINE_ENDING = b"\r\n"
@@ -261,7 +264,9 @@ class S3Dumper(DumperBase):
             filesizes[resource_name] = filesize
 
             if redis_conn is not None:
-                redis_conn.set(progress_key, REDIS_PROGRESS_SAVING_DONE_FLAG)
+                redis_conn.set(
+                    progress_key, REDIS_PROGRESS_SAVING_DONE_FLAG, ex=REDIS_EXPIRES
+                )
 
         for resource_descriptor in self.datapackage.descriptor["resources"]:
             resource_name = resource_descriptor["name"]
@@ -379,7 +384,15 @@ class S3Dumper(DumperBase):
             return None, None, e
 
     @staticmethod
-    def write_part(contents, object_key, upload_id, part_number, bucket_name):
+    def write_part(
+        contents,
+        object_key,
+        upload_id,
+        part_number,
+        bucket_name,
+        resource_name,
+        cache_id,
+    ):
         try:
             contents = contents.replace(WINDOWS_LINE_ENDING, UNIX_LINE_ENDING)
 
@@ -407,6 +420,15 @@ class S3Dumper(DumperBase):
                 UploadId=upload_id,
                 PartNumber=part_number,
             )
+            if cache_id:
+                redis_conn = get_redis_connection()
+                redis_key = get_redis_progress_parts_key(resource_name, cache_id)
+                redis_conn.sadd(
+                    redis_key,
+                    part_number,
+                )
+                redis_conn.expire(redis_key, REDIS_EXPIRES)
+
             print(
                 f"Completed uploading part of size {round(len(contents) / (1024 * 1024), 4)}MiB after {round(time.time() - start, 3)}"
             )
@@ -457,6 +479,8 @@ class S3Dumper(DumperBase):
                         upload_id,
                         part_number,
                         self.bucket_name,
+                        resource_name,
+                        self.cache_id,
                     ),
                 )
 
@@ -497,9 +521,16 @@ class S3Dumper(DumperBase):
         progress_key = None
         if self.cache_id:
             redis_conn = get_redis_connection()
+            redis_key = get_redis_progress_resource_key(self.cache_id)
             redis_conn.sadd(
-                get_redis_progress_resource_key(self.cache_id),
+                redis_key,
                 resource_name,
+            )
+            redis_conn.expire(redis_key, REDIS_EXPIRES)
+
+            redis_conn.delete(
+                get_redis_progress_parts_key(resource_name, self.cache_id),
+                get_redis_progress_num_parts_key(resource_name, self.cache_id),
             )
 
             progress_key = get_redis_progress_key(resource_name, self.cache_id)
@@ -534,7 +565,7 @@ class S3Dumper(DumperBase):
 
                 redis_timer = time.time()
                 if redis_conn is not None and time.time() - timer > 0.75:
-                    redis_conn.set(progress_key, row_number)
+                    redis_conn.set(progress_key, row_number, ex=REDIS_EXPIRES)
                     timer = time.time()
                 redis_timer_sum += time.time() - redis_timer
 
@@ -577,12 +608,19 @@ class S3Dumper(DumperBase):
             row_number = None
             writer.finalize_file()
             # Upload final part
-            _, _, _, stream = self.async_write_part(
+            part_number, _, _, stream = self.async_write_part(
                 stream, resource, part_number, object_key, upload_id, True
             )
 
             if redis_conn is not None:
-                redis_conn.set(progress_key, REDIS_PROGRESS_SAVING_START_FLAG)
+                redis_conn.set(
+                    get_redis_progress_num_parts_key(resource_name, self.cache_id),
+                    part_number,
+                    ex=REDIS_EXPIRES,
+                )
+                redis_conn.set(
+                    progress_key, REDIS_PROGRESS_SAVING_START_FLAG, ex=REDIS_EXPIRES
+                )
 
             stream.close()
         except Exception as e:

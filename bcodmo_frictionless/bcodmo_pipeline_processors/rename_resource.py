@@ -9,6 +9,7 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
     get_redis_progress_resource_key,
     get_redis_connection,
     REDIS_PROGRESS_DELETED_FLAG,
+    REDIS_EXPIRES,
 )
 
 from dataflows.helpers.resource_matcher import ResourceMatcher
@@ -27,11 +28,15 @@ def rename_resource(old_resource, new_resource, cache_id=None):
                 if cache_id is not None:
                     redis_conn = get_redis_connection()
                     progress_key = get_redis_progress_key(old_name, cache_id)
-                    redis_conn.set(progress_key, REDIS_PROGRESS_DELETED_FLAG)
+                    redis_conn.set(
+                        progress_key, REDIS_PROGRESS_DELETED_FLAG, ex=REDIS_EXPIRES
+                    )
+                    redis_key = get_redis_progress_resource_key(cache_id)
                     redis_conn.sadd(
-                        get_redis_progress_resource_key(cache_id),
+                        redis_key,
                         new_resource,
                     )
+                    get_redis_progress_resource_key(cache_id)
                 res["name"] = new_resource
                 res["path"] = res["path"].replace(old_resource, new_resource)
 

@@ -6,6 +6,7 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
     get_redis_connection,
     REDIS_PROGRESS_LOADING_START_FLAG,
     REDIS_PROGRESS_LOADING_DONE_FLAG,
+    REDIS_EXPIRES,
 )
 
 
@@ -40,6 +41,7 @@ class BcodmoAWS(AWSLoader):
                         self.loader_resource_name, self.loader_cache_id
                     ),
                     REDIS_PROGRESS_LOADING_START_FLAG,
+                    ex=REDIS_EXPIRES,
                 )
         if self.preloaded_chars is None:
             chars = super(BcodmoAWS, self).load(source, mode=mode, encoding=encoding)
@@ -49,5 +51,6 @@ class BcodmoAWS(AWSLoader):
             redis_conn.set(
                 get_redis_progress_key(self.loader_resource_name, self.loader_cache_id),
                 REDIS_PROGRESS_LOADING_DONE_FLAG,
+                ex=REDIS_EXPIRES,
             )
         return chars
