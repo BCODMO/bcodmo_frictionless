@@ -12,6 +12,10 @@ from decimal import Decimal
 from moto import mock_s3
 from tabulator.exceptions import IOError as TabulatorIOError
 import logging
+import io
+import csv
+import hashlib
+from moto.server import ThreadedMotoServer
 
 from bcodmo_frictionless.bcodmo_pipeline_processors import *
 
@@ -50,14 +54,8 @@ def test_dump_s3():
     ]
 
     rows, datapackage, _ = Flow(*flows).results()
-    body = (
-        conn.get_object(Bucket="testing_dump_bucket", Key="test/res.csv")["Body"]
-        .read()
-        .decode("utf-8")
-    )
-
-    assert len(body)
     assert len(datapackage.resources) == 1
+    assert datapackage.descriptor["count_of_rows"] == 4
 
 
 @mock_s3
@@ -91,16 +89,25 @@ def test_dump_s3_hash():
     ]
 
     rows, datapackage, _ = Flow(*flows).results()
-    s3_resp = conn.head_object(Bucket="testing_dump_bucket", Key="test/res.csv")
+    md5 = hashlib.md5()
+    with open("data/test.csv", "rb") as f:
+        while True:
+            data = f.read(65536)
+            if not data:
+                break
+            md5.update(data)
 
-    assert s3_resp["ETag"].strip('"') == datapackage.resources[0].descriptor["hash"]
+    assert md5.hexdigest() == datapackage.resources[0].descriptor["hash"]
 
 
 @mock_s3
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_dump_scientific_notation():
+    server = ThreadedMotoServer()
+    server.start()
+    os.environ["LAMINAR_S3_HOST"] = "http://localhost:5000"
     # create bucket and put objects
-    conn = boto3.client("s3")
+    conn = boto3.client("s3", endpoint_url="http://localhost:5000")
     conn.create_bucket(Bucket="testing_bucket")
     conn.create_bucket(Bucket="testing_dump_bucket")
     conn.upload_file(
@@ -228,6 +235,7 @@ def test_dump_scientific_notation():
     assert len(body)
     assert body == "scientific_notation\n4.273e-7\n"
     assert len(datapackage.resources) == 1
+    server.stop()
 
 
 data_1 = [
@@ -238,7 +246,11 @@ data_1 = [
 @mock_s3
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_dump_scientific_notation_negative():
-    conn = boto3.client("s3")
+    server = ThreadedMotoServer()
+    server.start()
+    os.environ["LAMINAR_S3_HOST"] = "http://localhost:5000"
+
+    conn = boto3.client("s3", endpoint_url="http://localhost:5000")
     conn.create_bucket(Bucket="testing_dump_bucket")
     flows = [
         data_1,
@@ -272,3 +284,61 @@ def test_dump_scientific_notation_negative():
 
     assert len(body)
     assert body == "col1\n-0.0000000000000142\n"
+    server.stop()
+
+
+@mock_s3
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_large_dump_s3():
+    # There was an issue with multipart upload
+    server = ThreadedMotoServer()
+    server.start()
+    os.environ["LAMINAR_S3_HOST"] = "http://localhost:5000"
+
+    # create bucket and put objects
+    conn = boto3.client("s3", endpoint_url="http://localhost:5000")
+    conn.create_bucket(Bucket="testing_bucket")
+    conn.create_bucket(Bucket="testing_dump_bucket")
+    f = io.StringIO()
+    writer = csv.writer(f)
+    header = [["a", "b", "c", "d"]]
+    num_rows = 1000000
+    rows = [[1, 2, 3, 4, 5]] * num_rows
+    writer.writerows(header + rows)
+    f.seek(0)
+    f = io.BytesIO(f.read().encode("utf-8"))
+
+    conn.upload_fileobj(f, "testing_bucket", "test.csv")
+
+    flows = [
+        load(
+            {
+                "from": "s3://testing_bucket/test.csv",
+                "name": "res",
+                "format": "csv",
+            }
+        ),
+        dump_to_s3(
+            {
+                "prefix": "test",
+                "force-format": True,
+                "format": "csv",
+                "save_pipeline_spec": True,
+                "temporal_format_property": "outputFormat",
+                "bucket_name": "testing_dump_bucket",
+                "data_manager": "test",
+            }
+        ),
+    ]
+
+    rows, datapackage, _ = Flow(*flows).results()
+    body = (
+        conn.get_object(Bucket="testing_dump_bucket", Key="test/res.csv")["Body"]
+        .read()
+        .decode("utf-8")
+    )
+
+    assert len(body) == 8000008
+    assert len(datapackage.resources) == 1
+    assert datapackage.descriptor["count_of_rows"] == num_rows
+    server.stop()
