@@ -354,6 +354,10 @@ def load(_from, parameters):
                     ex=REDIS_EXPIRES,
                 )
 
+    # Default all infer and cast strategy to string to handle an update from dataflows that deprecates old pipelines
+    # https://bco-dmo-group.slack.com/archives/CSQ582V4Y/p1712063770616059
+    parameters["infer_strategy"] = "strings"
+    parameters["cast_strategy"] = "strings"
     params.extend(
         [
             count_resources(),

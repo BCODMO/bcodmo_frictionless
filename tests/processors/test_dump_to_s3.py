@@ -38,6 +38,8 @@ def test_dump_s3():
                 "from": "s3://testing_bucket/test.csv",
                 "name": "res",
                 "format": "csv",
+                "infer_strategy": "strings",
+                "cast_strategy": "strings",
             }
         ),
         dump_to_s3(
@@ -73,6 +75,8 @@ def test_dump_s3_hash():
                 "from": "s3://testing_bucket/test.csv",
                 "name": "res",
                 "format": "csv",
+                "infer_strategy": "strings",
+                "cast_strategy": "strings",
             }
         ),
         dump_to_s3(

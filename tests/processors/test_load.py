@@ -16,38 +16,16 @@ TEST_DEV = os.environ.get("TEST_DEV", False) == "true"
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_load_csv():
-    flows = [load({"from": "data/test.csv", "name": "res", "format": "csv"})]
-    rows, datapackage, _ = Flow(*flows).results()
-    assert datapackage
-    assert len(datapackage.resources) == 1
-    assert datapackage.resources[0].name == "res"
-    assert len(datapackage.resources[0].schema.fields) == 4
-
-    assert len(rows) == 1
-    assert rows[0][0] == {
-        "col1": "abc",
-        "col2": 1,
-        "col3": Decimal("1.532"),
-        "col4": "12/29/19",
-    }
-    assert rows[0][1] == {
-        "col1": "abc",
-        "col2": 2,
-        "col3": Decimal("35.131"),
-        "col4": "12/30/19",
-    }
-    assert rows[0][2] == {
-        "col1": "def",
-        "col2": 1,
-        "col3": Decimal("53.1"),
-        "col4": "12/31/19",
-    }
-
-
-@pytest.mark.skipif(TEST_DEV, reason="test development")
-def test_load_xlsx():
     flows = [
-        load({"from": "data/test.xlsx", "name": "res", "format": "xlsx", "sheet": 2})
+        load(
+            {
+                "from": "data/test.csv",
+                "name": "res",
+                "format": "csv",
+                "infer_strategy": "strings",
+                "cast_strategy": "strings",
+            }
+        )
     ]
     rows, datapackage, _ = Flow(*flows).results()
     assert datapackage
@@ -58,8 +36,49 @@ def test_load_xlsx():
     assert len(rows) == 1
     assert rows[0][0] == {
         "col1": "abc",
-        "col2": 1,
-        "col3": Decimal("1.532"),
+        "col2": "1",
+        "col3": "1.532",
+        "col4": "12/29/19",
+    }
+    assert rows[0][1] == {
+        "col1": "abc",
+        "col2": "2",
+        "col3": "35.131",
+        "col4": "12/30/19",
+    }
+    assert rows[0][2] == {
+        "col1": "def",
+        "col2": "1",
+        "col3": "53.1",
+        "col4": "12/31/19",
+    }
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_xlsx():
+    flows = [
+        load(
+            {
+                "from": "data/test.xlsx",
+                "name": "res",
+                "format": "xlsx",
+                "sheet": 2,
+                "infer_strategy": "strings",
+                "cast_strategy": "strings",
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert datapackage
+    assert len(datapackage.resources) == 1
+    assert datapackage.resources[0].name == "res"
+    assert len(datapackage.resources[0].schema.fields) == 4
+
+    assert len(rows) == 1
+    assert rows[0][0] == {
+        "col1": "abc",
+        "col2": "1",
+        "col3": "1.532",
         "col4": "12/29/19",
     }
 
@@ -183,7 +202,7 @@ def test_load_path_pattern():
         )
     ]
     rows, datapackage, _ = Flow(*flows).results()
-    assert len(datapackage.resources) == 2
+    assert len(datapackage.resources) == 3
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
@@ -229,27 +248,28 @@ def test_load_seabird():
         "sigma-é11",
         "flag",
     ]
+    print(rows[0][0])
     assert rows[0][0] == {
-        "prDM": Decimal("3.000"),
-        "t090C": Decimal("8.2738"),
-        "t190C": Decimal("8.2746"),
-        "c0S/m": Decimal("3.493425"),
-        "c1S/m": Decimal("3.493550"),
-        "sbeox0V": Decimal("2.7741"),
-        "flECO-AFL": Decimal("1.1540"),
-        "turbWETntu0": Decimal("0.4288"),
-        "sal00 (1)": Decimal("33.3666"),
-        "spar": Decimal("-9.990E-29"),
-        "par": Decimal("1.0538"),
-        "cpar": Decimal("46.952"),
-        "depSM": Decimal("2.977"),
-        "sal00 (2)": Decimal("33.3666"),
-        "sal11": Decimal("33.3672"),
-        "sbeox0ML/L": Decimal("6.8136"),
-        "svCM": Decimal("1481.54"),
-        "sigma-é00": Decimal("25.9506"),
-        "sigma-é11": Decimal("25.9509"),
-        "flag": Decimal("0.0000"),
+        "prDM": "3.000",
+        "t090C": "8.2738",
+        "t190C": "8.2746",
+        "c0S/m": "3.493425",
+        "c1S/m": "3.493550",
+        "sbeox0V": "2.7741",
+        "flECO-AFL": "1.1540",
+        "turbWETntu0": "0.4288",
+        "sal00 (1)": "33.3666",
+        "spar": "-9.990e-29",
+        "par": "1.0538e+00",
+        "cpar": "4.6952e+01",
+        "depSM": "2.977",
+        "sal00 (2)": "33.3666",
+        "sal11": "33.3672",
+        "sbeox0ML/L": "6.8136",
+        "svCM": "1481.54",
+        "sigma-é00": "25.9506",
+        "sigma-é11": "25.9509",
+        "flag": "0.0000e+00",
     }
 
 
@@ -269,7 +289,7 @@ def test_load_seabird_infer_bug():
         )
     ]
     rows, datapackage, _ = Flow(*flows).results()
-    assert rows[0][107]["t090C"] == Decimal("10.0697")
+    assert rows[0][107]["t090C"] == "10.0697"
 
 
 @mock_s3
@@ -363,13 +383,12 @@ def test_load_s3_path_xlsx_regex():
         )
     ]
     rows, datapackage, _ = Flow(*flows).results()
-    print(rows)
     assert len(datapackage.resources) == 4
     assert datapackage.resources[0].name == "test2"
     assert rows[0][0]["col5"] == "abc"
-    assert rows[1][0]["col2"] == 1
-    assert rows[2][2]["col7"] == Decimal("53.1")
-    assert rows[3][1]["col6"] == 2
+    assert rows[1][0]["col2"] == "1"
+    assert rows[2][2]["col7"] == "53.1"
+    assert rows[3][1]["col6"] == "2"
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
@@ -569,31 +588,32 @@ def test_load_regex_csv():
                 "format": "bcodmo-regex-csv",
                 "skip_rows": ["#", "*"],
                 "delimiter": r"\s+",
+                "infer_strategy": "strings",
+                "cast_strategy": "strings",
             }
         )
     ]
     rows, datapackage, _ = Flow(*flows).results()
-    print(rows)
 
     assert len(datapackage.resources[0].schema.fields) == 4
 
     assert len(rows) == 1
     assert rows[0][0] == {
         "col1": "abc",
-        "col2": 1,
-        "col3": Decimal("1.532"),
+        "col2": "1",
+        "col3": "1.532",
         "col4": "12/29/19",
     }
     assert rows[0][1] == {
         "col1": "abc",
-        "col2": 2,
-        "col3": Decimal("35.131"),
+        "col2": "2",
+        "col3": "35.131",
         "col4": "12/30/19",
     }
     assert rows[0][2] == {
         "col1": "def",
-        "col2": 1,
-        "col3": Decimal("53.1"),
+        "col2": "1",
+        "col3": "53.1",
         "col4": "12/31/19",
     }
 
@@ -645,3 +665,28 @@ def test_load_regex_csv_capture_skipped_rows_column_name_bug():
     assert "QUALT1" in rows[0][0]
     assert len(rows[0][0]) == 7
     assert rows[0][0]["EXPOCODE"] == "316N145_10"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_csv_multiline_header():
+    flows = [
+        load(
+            {
+                "from": "data/test_multiline_header.csv",
+                "name": "res",
+                "format": "csv",
+                "headers": [1, 2],
+                "multiline_headers_joiner": ";",
+                "infer_strategy": "strings",
+                "cast_strategy": "strings",
+                "multiline_headers_duplicates": True,
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert datapackage
+    assert len(datapackage.resources) == 1
+    assert datapackage.resources[0].name == "res"
+    assert len(datapackage.resources[0].schema.fields) == 5
+    assert datapackage.resources[0].schema.fields[0].name == "1;5"
+    assert datapackage.resources[0].schema.fields[2].name == "3;3"

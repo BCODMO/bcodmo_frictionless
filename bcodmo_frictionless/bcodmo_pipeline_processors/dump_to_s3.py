@@ -14,7 +14,7 @@ from datapackage_pipelines.utilities.flow_utils import spew_flow
 from billiard import Process, Queue, Pool
 
 from dataflows.processors.dumpers.dumper_base import DumperBase
-from dataflows.processors.dumpers.file_formats import CSVFormat, JSONFormat, FileFormat
+from dataflows.processors.dumpers.formats import CSVFormat, JSONFormat, FileFormat
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
     get_redis_progress_key,
     get_redis_progress_resource_key,
@@ -25,6 +25,7 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
     REDIS_PROGRESS_SAVING_DONE_FLAG,
     REDIS_EXPIRES,
 )
+from bcodmo_frictionless.bcodmo_pipeline_processors.helper import get_missing_values
 
 WINDOWS_LINE_ENDING = b"\r\n"
 UNIX_LINE_ENDING = b"\n"
@@ -543,63 +544,33 @@ class S3Dumper(DumperBase):
         row_number = None
         upload_id = None
 
-        writer_timer_sum = 0
-        process_timer_sum = 0
-        process_timer_count = 0
-        process_timer = None
-        redis_timer_sum = 0
-
         try:
             row_number = 0
             part_number = 0
-            start = time.time()
             timer = time.time()
 
-            yield_start = time.time()
-            yield_total = 0
-            async_total = 0
-            loop_total = 0
             for row in resource:
-                loop_total += time.time() - yield_start
-
                 row_number += 1
 
-                writer_timer = time.time()
                 writer.write_row(row)
-                writer_timer_sum += time.time() - writer_timer
 
-                redis_timer = time.time()
                 if redis_conn is not None and time.time() - timer > 0.75:
                     redis_conn.set(progress_key, row_number, ex=REDIS_EXPIRES)
                     timer = time.time()
-                redis_timer_sum += time.time() - redis_timer
 
-                async_start = time.time()
-                if row_number % 25 == 0 and stream.tell() > calculate_partsize(
+                if row_number % 100 == 0 and stream.tell() > calculate_partsize(
                     part_number
                 ):
                     part_number, upload_id, writer, stream = self.async_write_part(
                         stream, resource, part_number, object_key, upload_id, False
                     )
-                async_total += time.time() - async_start
 
-                yield_total += time.time() - yield_start
-                if (row_number + 1) % 10000 == 0:
-                    # print(
-                    #    f"total {yield_total}. async {async_total}. redis {redis_timer_sum}. writer {writer_timer_sum}. loop {loop_total}"
-                    # )
-                    yield_total = 0
-                    async_total = 0
-                    redis_timer_sum = 0
-                    writer_timer_sum = 0
-                    loop_total = 0
                 if (
                     self.limit_yield is None
                     or self.limit_yield < 0
                     or row_number <= self.limit_yield
                 ):
                     yield row
-                yield_start = time.time()
             # Set row number values
             DumperBase.inc_attr(
                 self.datapackage.descriptor, self.datapackage_rowcount, row_number
@@ -613,6 +584,7 @@ class S3Dumper(DumperBase):
             row_number = None
             writer.finalize_file()
             # Upload final part
+            print("Starting last upload")
             part_number, _, _, stream = self.async_write_part(
                 stream, resource, part_number, object_key, upload_id, True
             )
