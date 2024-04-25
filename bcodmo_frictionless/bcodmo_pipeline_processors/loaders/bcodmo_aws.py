@@ -46,6 +46,7 @@ class BcodmoAWS(AWSLoader):
         if self.preloaded_chars is None:
             chars = super(BcodmoAWS, self).load(source, mode=mode, encoding=encoding)
         else:
+            self.encoding = encoding
             chars = self.preloaded_chars
         if redis_conn is not None:
             redis_conn.set(
