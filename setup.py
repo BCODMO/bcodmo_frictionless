@@ -8,7 +8,7 @@ required = [
     "dataflows==0.5.5",
     # "dataflows @ git+https://github.com/cschloer/dataflows.git@master",
     # "tabulator==1.53.5",
-    "tabulator @ git+https://github.com/BCODMO/tabulator-py.git@main",
+    "tabulator @ git+https://github.com/BCODMO/tabulator-py.git@335db698c2088a4d730ddc8d52ceea5c285b6659",
     "goodtables==2.5.0",
     "python-dateutil==2.8.0",
     "xlrd==1.2.0",
