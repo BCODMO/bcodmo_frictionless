@@ -8,7 +8,7 @@ required = [
     "dataflows==0.5.5",
     # "dataflows @ git+https://github.com/cschloer/dataflows.git@master",
     # "tabulator==1.53.5",
-    "tabulator @ git+https://github.com/BCODMO/tabulator-py.git@75ff0f044607bed7234d569b32eeb33772af51f7",
+    "tabulator @ git+https://github.com/BCODMO/tabulator-py.git@main",
     "goodtables==2.5.0",
     "python-dateutil==2.8.0",
     "xlrd==1.2.0",
@@ -17,7 +17,7 @@ required = [
 
 setup(
     name="bcodmo_frictionless",
-    version="v2.10.6",
+    version="v3.1.3",
     description="BCODMO Custom Processors and Checks",
     author="BCODMO",
     author_email="conrad.schloer@gmail.com",
