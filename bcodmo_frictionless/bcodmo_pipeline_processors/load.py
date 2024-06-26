@@ -139,12 +139,25 @@ def load(_from, parameters):
             yield package.pkg
 
             def process_resource(rows, missing_data_values):
+                consecutive = 0
+                broke = False
                 for row in rows:
                     for value in row.values():
                         if value and value not in missing_data_values:
                             # Only yield if something in the row has a value
                             yield row
+                            broke = True
                             break
+
+                    # We handle the case where there are tons of empty rows
+                    if broke:
+                        consecutive = 0
+                    else:
+                        consecutive += 1
+                    broke = False
+                    # After 1000 consecutive empty rows, we break
+                    if consecutive >= 1000:
+                        break
 
             for r in package:
                 if r.res.name in names:
