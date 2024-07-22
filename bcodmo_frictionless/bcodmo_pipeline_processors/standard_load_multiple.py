@@ -104,7 +104,8 @@ class standard_load_multiple(standard_load):
                     self.preloaded_chars = io.BufferedRandom(io.BytesIO(chars_s))
                 else:
                     self.preloaded_chars = io.TextIOWrapper(
-                        io.BytesIO(bytes(chars_s.encode(encoding)))
+                        io.BytesIO(bytes(chars_s.encode(encoding))),
+                        encoding=encoding,
                     )
 
             super(standard_load_multiple, self).process_datapackage(Package())
