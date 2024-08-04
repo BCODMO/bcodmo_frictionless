@@ -34,12 +34,14 @@ class standard_load_multiple(standard_load):
         load_sources,
         names,
         sheets=None,
+        limit_rows_loader=None,
         **options,
     ):
         super(standard_load_multiple, self).__init__("", **options)
         self.load_sources = load_sources
         self.names = names
         self.sheets = sheets
+        self.limit_rows_loader = limit_rows_loader
 
     def _set_individual(self, i):
         load_source = self.load_sources[i]
@@ -176,6 +178,16 @@ class standard_load_multiple(standard_load):
                 options = self.options
                 if self.preloaded_chars is not None:
                     options["preloaded_chars"] = self.preloaded_chars
+
+                # For all formats that don't require being fully loaded in (AKA everything except for xlsx and xls,
+                # we can limit the rows in the streaming itself
+                if (
+                    self.limit_rows_loader
+                    and self.limit_rows is not None
+                    and self.options.get("format") != "xlsx"
+                    and self.options.get("format") != "xls"
+                ):
+                    options["_limit_rows"] = self.limit_rows
                 stream: Stream = Stream(self.load_source, **options).open()
                 """ Finish change to add preloaded data """
 
