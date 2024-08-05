@@ -76,10 +76,10 @@ class BcodmoAWS(Loader):
                     if contents:
                         row_count += contents.count(b"\n")
                         bytes.write(contents)
-                        # To be extra safe, we multiply by two and add 100. This is meant to deal with
-                        # situations where there is a weird header/empty row situation at the beginning of the file
+                        # To be extra safe, we add 100. This is meant to deal with situations
+                        # where there is a weird header/empty row situation at the beginning of the file
                         # which will later be filtered by the parser
-                        if row_count >= self.limit_rows * 2 + 100:
+                        if row_count >= self.limit_rows + 100:
                             break
                     else:
                         break
