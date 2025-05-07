@@ -127,7 +127,7 @@ class RegexCSVParser(Parser):
 
         for i, item in enumerate(iter(items.readline, "")):
             row_number = i + 1
-            l = [x for x in re.split(self.__delimiter, item) if x is not ""]
+            l = [x for x in re.split(self.__delimiter, item)]
             for captured_row in captured_rows:
                 # Append the name if it's not a data row (either header or to be skipped)
                 if not self._is_data_row(l, row_number):
