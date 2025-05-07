@@ -17,7 +17,7 @@ required = [
 
 setup(
     name="bcodmo_frictionless",
-    version="v3.1.4",
+    version="v3.1.9",
     description="BCODMO Custom Processors and Checks",
     author="BCODMO",
     author_email="conrad.schloer@gmail.com",
