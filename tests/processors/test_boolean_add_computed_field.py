@@ -62,3 +62,25 @@ def test_boolean_add_computed_field_datetime():
     assert rows[0][0]["new_col2"] == None
     assert rows[0][1]["new_col2"] == dateutil.parser.parse("2012-05-24T16:24:09Z")
     assert rows[0][2]["new_col2"] == None
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_boolean_add_computed_field_always_run():
+    flows = [
+        data,
+        boolean_add_computed_field(
+            {
+                "fields": [
+                    {
+                        "target": "new_col1",
+                        "type": "string",
+                        "functions": [{"always_run": True, "value": "{col1}"}],
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert rows[0][0]["new_col1"] == "abc"
+    assert rows[0][1]["new_col1"] == "heresabc"
+    assert rows[0][2]["new_col1"] == "nothere"
