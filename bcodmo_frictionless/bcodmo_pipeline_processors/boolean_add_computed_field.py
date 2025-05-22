@@ -32,13 +32,22 @@ def process_resource(rows, fields, missing_values):
         for function in field.get("functions", []):
             boolean_string = function.get("boolean", "")
             value_string = function.get("value", "")
+            always_run = function.get("always_run", False)
 
-            # Parse the field boolean string
-            field_expression = get_expression(boolean_string)
-            field_functions[index].append(field_expression)
+            if always_run:
+                # Send True to the function
+                field_functions[index].append(True)
+            else:
+                if not boolean_string:
+                    raise Exception(
+                        f"Missing boolean string for function in boolean_add_computed_fields"
+                    )
+
+                # Parse the field boolean string
+                field_expression = get_expression(boolean_string)
+                field_functions[index].append(field_expression)
 
             # Parse the value boolean string
-
             if function.get("math_operation", False):
                 value_expression = get_expression(value_string, math_expr)
                 value_functions[index].append(value_expression)
@@ -58,8 +67,12 @@ def process_resource(rows, fields, missing_values):
                     function = functions[func_index]
                     expression = field_functions[field_index][func_index]
 
-                    expression_true = parse_boolean(
-                        row_counter, expression, new_row, missing_values
+                    expression_true = (
+                        expression
+                        if isinstance(expression, bool)
+                        else parse_boolean(
+                            row_counter, expression, new_row, missing_values
+                        )
                     )
                     if expression_true:
                         value_ = function.get("value", "")
@@ -105,7 +118,10 @@ def boolean_add_computed_field(fields, resources=None):
                 # Create a list of names and a lookup dict for the new fields
                 new_field_names = [f["target"] for f in fields]
                 new_fields_dict = {
-                    f["target"]: {"name": f["target"], "type": f.get("type", "string"),}
+                    f["target"]: {
+                        "name": f["target"],
+                        "type": f.get("type", "string"),
+                    }
                     for f in fields
                 }
 
@@ -129,7 +145,9 @@ def boolean_add_computed_field(fields, resources=None):
             if matcher.match(rows.res.name):
                 missing_values = get_missing_values(rows.res)
                 yield process_resource(
-                    rows, fields, missing_values,
+                    rows,
+                    fields,
+                    missing_values,
                 )
             else:
                 yield rows
@@ -140,7 +158,8 @@ def boolean_add_computed_field(fields, resources=None):
 def flow(parameters):
     return Flow(
         boolean_add_computed_field(
-            parameters.get("fields", []), resources=parameters.get("resources"),
+            parameters.get("fields", []),
+            resources=parameters.get("resources"),
         )
     )
 
