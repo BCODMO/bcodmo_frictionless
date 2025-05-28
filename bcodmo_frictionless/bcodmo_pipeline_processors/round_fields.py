@@ -71,7 +71,7 @@ def process_resource(rows, fields, missing_values, boolean_statement=None):
                         row[field["name"]] = rounded_val
                     else:
                         raise Exception(
-                            f'Attempting to convert a field ("{field["name"]}") that has not been cast to a number'
+                            f'Attempting to round a field ("{field["name"]}") that has not been cast to a number'
                         )
                 yield row
             except Exception as e:
@@ -99,7 +99,7 @@ def round_fields(fields, resources=None, boolean_statement=None):
                             if package_field["name"] == field["name"]:
                                 if package_field["type"] != "number":
                                     raise Exception(
-                                        f'Tried to convert a field ("{field["name"]}") that has not been cast to a number: {field["type"]}. Make sure all fields used with the round_fields processor are numbers.'
+                                        f'Tried to round a field ("{field["name"]}") that has not been cast to a number: {field["type"]}. Make sure all fields used with the round_fields processor are numbers.'
                                     )
                                 package_field["type"] = "integer"
 
