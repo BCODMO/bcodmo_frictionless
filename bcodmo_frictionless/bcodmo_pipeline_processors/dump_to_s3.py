@@ -138,6 +138,7 @@ class S3Dumper(DumperBase):
         self.cache_id = options.get("cache_id", None)
         self.delete = options.get("delete", False)
         self.limit_yield = options.get("limit_yield", None)
+        self.unique_lat_lons = {} if options.get("dump_unique_lat_lon", None) else None
 
         self.prefix = prefix
         self.bucket_name = bucket_name
@@ -333,6 +334,28 @@ class S3Dumper(DumperBase):
 
         self.write_file_to_output(contents, "datapackage.json", "application/json")
 
+        if self.unique_lat_lons is not None:
+            for resource in self.datapackage.descriptor["resources"]:
+                if resource_name in self.unique_lat_lons:
+                    lat_lons = self.unique_lat_lons[resource_name]
+                    resource_name = resource["name"]
+                    output = io.StringIO()
+
+                    # Create CSV writer
+                    writer = csv.writer(output)
+                    # Write headers
+                    writer.writerow(["latitude", "longitude"])
+
+                    # Write data rows
+                    for lat, lon in lat_lons:
+                        writer.writerow([lat, lon])
+                    csv_string = output.getvalue()
+                    output.close()
+                    csv_bytes = csv_string.encode()
+                    self.write_file_to_output(
+                        csv_bytes, f"{resource_name}.unique_lat_lon.csv", "text/csv"
+                    )
+
         super(S3Dumper, self).handle_datapackage()
 
     def write_file_to_output(
@@ -509,7 +532,37 @@ class S3Dumper(DumperBase):
 
     def rows_processor(self, resource, writer, stream):
         resource_name = resource.res.descriptor["name"]
+        lat_field_name = None
+        lon_field_name = None
+        if self.unique_lat_lons is not None:
+            for field in resource.res.descriptor["schema"]["fields"]:
+                bcodmo_metadata = field.get("bcodmo:", {})
+                if (
+                    bcodmo_metadata["standard_name_id"] == "730"
+                    and bcodmo_metadata["is_primary"]
+                ):
+                    lat_field_name = field["name"]
+                if (
+                    bcodmo_metadata["standard_name_id"] == "731"
+                    and bcodmo_metadata["is_primary"]
+                ):
+                    lon_field_name = field["name"]
 
+            if lat_field_name and lon_field_name:
+                self.unique_lat_lons[resource_name] = set()
+            else:
+                if not lat_field_name and lon_field_name:
+                    raise Exception(
+                        "Missing primary latitude field in the datapackage. Either properly define the primary latitude field using updateFields or do not select dump unique lat lon in the dump_to_s3 processor"
+                    )
+
+                if lat_field_name and not lon_field_name:
+                    raise Exception(
+                        "Missing primary longitude field in the datapackage. Either properly define the primary longitude field using updateFields or do not select dump unique lat lon in the dump_to_s3 processor"
+                    )
+                raise Exception(
+                    "Missing primary longitude and primary latitude fields in the datapackage. Either properly define the primary fields using updateFields or do not select dump unique lat lon in the dump_to_s3 processor"
+                )
         path = resource.res.source
         if path.startswith("."):
             path = path[1:]
@@ -551,6 +604,12 @@ class S3Dumper(DumperBase):
 
             for row in resource:
                 row_number += 1
+                if lat_field_name and lon_field_name:
+                    lat_lon_tuple = (
+                        row[lat_field_name],
+                        row[lon_field_name],
+                    )
+                    self.unique_lat_lons[resource_name].add(lat_lon_tuple)
 
                 writer.write_row(row)
 
