@@ -535,18 +535,16 @@ class S3Dumper(DumperBase):
         lat_field_name = None
         lon_field_name = None
         if self.unique_lat_lons is not None:
-            for field in resource.res.descriptor["schema"]["fields"]:
+            for field in resource.res.descriptor.get("schema", {}).get("fields", {}):
                 bcodmo_metadata = field.get("bcodmo:", {})
-                if (
-                    bcodmo_metadata["standard_name_id"] == "730"
-                    and bcodmo_metadata["is_primary"]
-                ):
-                    lat_field_name = field["name"]
-                if (
-                    bcodmo_metadata["standard_name_id"] == "731"
-                    and bcodmo_metadata["is_primary"]
-                ):
-                    lon_field_name = field["name"]
+                if bcodmo_metadata.get(
+                    "standard_name_id", ""
+                ) == "730" and bcodmo_metadata.get("is_primary", False):
+                    lat_field_name = field.get("name", "")
+                if bcodmo_metadata.get(
+                    "standard_name_id", ""
+                ) == "731" and bcodmo_metadata.get("is_primary", False):
+                    lon_field_name = field.get("name", "")
 
             if lat_field_name and lon_field_name:
                 self.unique_lat_lons[resource_name] = set()
