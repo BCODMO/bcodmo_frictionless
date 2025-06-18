@@ -87,7 +87,6 @@ class RegexCSVParser(Parser):
         return headers_row == row_number
 
     def __iter_extended_rows(self):
-
         headers_row = self.__stream._Stream__headers_row or 1
         items = self.__chars
         captured_rows_dict = {}

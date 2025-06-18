@@ -26,7 +26,7 @@ def test_convert_units():
                 "fields": [
                     {
                         "name": "col1",
-                        "conversion": "ft_to_meter",
+                        "conversion": "feet_to_meter",
                         "preserve_field": True,
                         "new_field_name": "col1_test",
                     }
@@ -50,7 +50,7 @@ def test_convert_units_no_preserve():
                 "fields": [
                     {
                         "name": "col1",
-                        "conversion": "ft_to_meter",
+                        "conversion": "feet_to_meter",
                         "preserve_field": False,
                     }
                 ]
@@ -71,7 +71,7 @@ def test_convert_units_replace_same():
                 "fields": [
                     {
                         "name": "col1",
-                        "conversion": "ft_to_meter",
+                        "conversion": "feet_to_meter",
                         "preserve_field": True,
                         "new_field_name": "col1",
                     }
@@ -96,7 +96,7 @@ def test_convert_units_replace_existing():
                     "fields": [
                         {
                             "name": "col1",
-                            "conversion": "ft_to_meter",
+                            "conversion": "feet_to_meter",
                             "preserve_field": True,
                             "new_field_name": "col2",
                         }
