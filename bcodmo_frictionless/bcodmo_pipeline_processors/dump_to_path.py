@@ -5,15 +5,10 @@ import logging
 
 from dataflows import Flow
 from dataflows.processors.dumpers.file_dumper import FileDumper
-from datapackage_pipelines.wrapper import ingest
-from datapackage_pipelines.specs import pipelines
-from datapackage_pipelines.utilities.flow_utils import spew_flow
-from datapackage_pipelines.utilities.stat_utils import (
-    STATS_DPP_KEY,
-    STATS_OUT_DP_URL_KEY,
-)
 
-logging.basicConfig(level=logging.WARNING,)
+logging.basicConfig(
+    level=logging.WARNING,
+)
 logger = logging.getLogger(__name__)
 
 
@@ -81,7 +76,9 @@ class dump_to_path(FileDumper):
                 try:
                     self.write_file_to_output(path, "pipeline-spec.yaml")
                 except Exception as e:
-                    logger.warn(f"Failed to save the pipeline-spec.yaml: {str(e)}",)
+                    logger.warn(
+                        f"Failed to save the pipeline-spec.yaml: {str(e)}",
+                    )
             else:
                 # self from pipeline_spec inputted
                 try:
@@ -96,7 +93,9 @@ class dump_to_path(FileDumper):
                     temp_file.close()
                     self.write_file_to_output(temp_file_name, "pipeline-spec.yaml")
                 except Exception as e:
-                    logger.warn(f"Failed to save the pipeline-spec.yaml: {str(e)}",)
+                    logger.warn(
+                        f"Failed to save the pipeline-spec.yaml: {str(e)}",
+                    )
 
         super(dump_to_path, self).handle_datapackage()
 
@@ -107,14 +106,4 @@ class dump_to_path(FileDumper):
 
 def flow(parameters: dict):
     out_path = parameters.pop("out-path", ".")
-    """
-    stats.setdefault(STATS_DPP_KEY, {})[STATS_OUT_DP_URL_KEY] = os.path.join(
-        out_path, "datapackage.json"
-    )
-    """
     return Flow(dump_to_path(out_path, **parameters))
-
-
-if __name__ == "__main__":
-    with ingest() as ctx:
-        spew_flow(flow(ctx.parameters), ctx)

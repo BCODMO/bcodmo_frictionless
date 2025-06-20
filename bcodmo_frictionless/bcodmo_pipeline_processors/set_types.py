@@ -1,7 +1,5 @@
 from dataflows import Flow, PackageWrapper, schema_validator
 from dataflows.helpers.resource_matcher import ResourceMatcher
-from datapackage_pipelines.wrapper import ingest
-from datapackage_pipelines.utilities.flow_utils import spew_flow
 import re
 
 
@@ -35,8 +33,3 @@ def flow(parameters):
     regex = parameters.get("regex", True)
     types = parameters.get("types", {})
     return Flow(set_types(parameters, resources=resources, regex=regex, types=types))
-
-
-if __name__ == "__main__":
-    with ingest() as ctx:
-        spew_flow(flow(ctx.parameters), ctx)

@@ -1,7 +1,4 @@
 from dataflows import Flow, update_resource
-from datapackage_pipelines.wrapper import ingest
-from datapackage_pipelines.utilities.resources import PROP_STREAMING
-from datapackage_pipelines.utilities.flow_utils import spew_flow
 import itertools
 import os
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
@@ -59,8 +56,3 @@ def flow(parameters):
             parameters.get("cache_id"),
         ),
     )
-
-
-if __name__ == "__main__":
-    with ingest() as ctx:
-        spew_flow(flow(ctx.parameters), ctx)

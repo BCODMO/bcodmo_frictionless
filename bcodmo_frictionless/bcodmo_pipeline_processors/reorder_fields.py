@@ -1,10 +1,7 @@
-from datapackage_pipelines.wrapper import ingest, spew
 from dataflows.helpers.resource_matcher import ResourceMatcher
 import logging
 
 from dataflows import Flow
-from datapackage_pipelines.wrapper import ingest
-from datapackage_pipelines.utilities.flow_utils import spew_flow
 
 
 def reorder_fields(fields, resources=None):
@@ -39,11 +36,7 @@ def reorder_fields(fields, resources=None):
 def flow(parameters):
     return Flow(
         reorder_fields(
-            parameters.get("fields", []), resources=parameters.get("resources", None),
+            parameters.get("fields", []),
+            resources=parameters.get("resources", None),
         )
     )
-
-
-if __name__ == "__main__":
-    with ingest() as ctx:
-        spew_flow(flow(ctx.parameters), ctx)

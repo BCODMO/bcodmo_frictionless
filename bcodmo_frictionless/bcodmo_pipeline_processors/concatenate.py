@@ -6,9 +6,6 @@ import os
 from dataflows import Flow, update_resource
 from dataflows.helpers.resource_matcher import ResourceMatcher
 
-from datapackage_pipelines.wrapper import ingest
-from datapackage_pipelines.utilities.resources import PROP_STREAMING
-from datapackage_pipelines.utilities.flow_utils import spew_flow
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
     get_redis_progress_key,
     get_redis_connection,
@@ -16,6 +13,9 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
     REDIS_PROGRESS_DELETED_FLAG,
     REDIS_EXPIRES,
 )
+
+PROP_STREAMED_FROM = "dpp:streamedFrom"
+PROP_STREAMING = "dpp:streaming"
 
 
 def concatenator(resources, all_target_fields, field_mapping, include_source_names):
@@ -244,8 +244,3 @@ def flow(parameters):
             },
         ),
     )
-
-
-if __name__ == "__main__":
-    with ingest() as ctx:
-        spew_flow(flow(ctx.parameters), ctx)

@@ -4,8 +4,6 @@ from decimal import Decimal
 
 from dataflows import Flow
 from dataflows.helpers.resource_matcher import ResourceMatcher
-from datapackage_pipelines.wrapper import ingest
-from datapackage_pipelines.utilities.flow_utils import spew_flow
 
 from bcodmo_frictionless.bcodmo_pipeline_processors.boolean_processor_helper import (
     get_expression,
@@ -125,8 +123,3 @@ def flow(parameters):
             boolean_statement=parameters.get("boolean_statement"),
         )
     )
-
-
-if __name__ == "__main__":
-    with ingest() as ctx:
-        spew_flow(flow(ctx.parameters), ctx)

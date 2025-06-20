@@ -3,9 +3,6 @@ from dataflows.helpers.resource_matcher import ResourceMatcher
 from dataflows import Flow
 import logging
 
-from datapackage_pipelines.wrapper import ingest
-from datapackage_pipelines.utilities.flow_utils import spew_flow
-
 
 def process_resource(rows, fields):
     row_counter = 0
@@ -45,7 +42,8 @@ def rename_fields(fields, resources=None):
         for rows in package:
             if matcher.match(rows.res.name):
                 yield process_resource(
-                    rows, fields,
+                    rows,
+                    fields,
                 )
             else:
                 yield rows
@@ -56,11 +54,7 @@ def rename_fields(fields, resources=None):
 def flow(parameters):
     return Flow(
         rename_fields(
-            parameters.get("fields", []), resources=parameters.get("resources"),
+            parameters.get("fields", []),
+            resources=parameters.get("resources"),
         )
     )
-
-
-if __name__ == "__main__":
-    with ingest() as ctx:
-        spew_flow(flow(ctx.parameters), ctx)
