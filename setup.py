@@ -10,7 +10,7 @@ required = [
     # "tabulator==1.53.5",
     "tabulator @ git+https://github.com/BCODMO/tabulator-py.git@main",
     "goodtables==2.5.0",
-    "python-dateutil==2.8.0",
+    "python-dateutil==2.8.2",
     "xlrd==1.2.0",
 ]
 
