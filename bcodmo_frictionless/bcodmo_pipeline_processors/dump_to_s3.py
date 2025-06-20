@@ -242,8 +242,8 @@ class S3Dumper(DumperBase):
             parts = []
             filesize = 0
             is_multipart = False
-            for proc in procs:
-                partsize, part, err = proc.get()
+            for proc_wrapper in procs:
+                partsize, part, err = proc_wrapper["proc"].get()
                 if err is not None:
                     return self._handle_exception(err, resource_name)
                 parts.append(part)
@@ -479,8 +479,9 @@ class S3Dumper(DumperBase):
         stream.seek(0)
         s = stream.read()
         contents = s.encode()
+        contents_size = len(contents)
 
-        if len(contents):
+        if contents_size:
             if is_last and part_number == 1:
                 # Don't use multipart if the file size is less than 5MB
                 proc = self.pool.apply_async(
@@ -513,7 +514,9 @@ class S3Dumper(DumperBase):
                     ),
                 )
 
-            self.procs[resource_name]["procs"].append(proc)
+            self.procs[resource_name]["procs"].append(
+                {"proc": proc, "size": contents_size}
+            )
         stream.close()
         writer, stream = self.generate_writer(resource, write_header=False)
         return part_number, upload_id, writer, stream
@@ -621,6 +624,29 @@ class S3Dumper(DumperBase):
                     part_number, upload_id, writer, stream = self.async_write_part(
                         stream, resource, part_number, object_key, upload_id, False
                     )
+
+                    size_running = sum(
+                        [
+                            p["size"]
+                            for p in self.procs[resource_name]["procs"]
+                            if not p["proc"].ready()
+                        ]
+                    )
+                    print(
+                        f"Size of current running in MB: {round(size_running / (1024 * 1024), 4)}"
+                    )
+                    while size_running > 1024 * 1024 * 1000:
+                        print(
+                            f"Size of current running is too big (MB {round(size_running / (1024 * 1024), 4)}) - SLEEPING"
+                        )
+                        time.sleep(1)
+                        size_running = sum(
+                            [
+                                p["size"]
+                                for p in self.procs[resource_name]["procs"]
+                                if not p["proc"].ready()
+                            ]
+                        )
 
                 if (
                     self.limit_yield is None
