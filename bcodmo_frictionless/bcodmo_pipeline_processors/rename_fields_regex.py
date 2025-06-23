@@ -3,8 +3,6 @@ import sys
 
 from dataflows.helpers.resource_matcher import ResourceMatcher
 from dataflows import Flow
-from datapackage_pipelines.wrapper import ingest
-from datapackage_pipelines.utilities.flow_utils import spew_flow
 
 
 def process_resource(rows, fields, pattern):
@@ -17,7 +15,9 @@ def process_resource(rows, fields, pattern):
                 if field not in new_row:
                     continue
                 new_field_name = re.sub(
-                    str(pattern["find"]), str(pattern["replace"]), str(field),
+                    str(pattern["find"]),
+                    str(pattern["replace"]),
+                    str(field),
                 )
                 if new_field_name is not field and new_field_name in new_row:
                     raise Exception(
@@ -41,7 +41,9 @@ def rename_fields_regex(fields, pattern, resources=None):
             if matcher.match(resource["name"]):
                 for field in fields:
                     new_field_name = re.sub(
-                        str(pattern["find"]), str(pattern["replace"]), str(field),
+                        str(pattern["find"]),
+                        str(pattern["replace"]),
+                        str(field),
                     )
                     package_fields = resource["schema"]["fields"]
                     for package_field in package_fields:
@@ -53,7 +55,9 @@ def rename_fields_regex(fields, pattern, resources=None):
         for rows in package:
             if matcher.match(rows.res.name):
                 yield process_resource(
-                    rows, fields, pattern,
+                    rows,
+                    fields,
+                    pattern,
                 )
             else:
                 yield rows
@@ -69,8 +73,3 @@ def flow(parameters):
             resources=parameters.get("resources"),
         )
     )
-
-
-if __name__ == "__main__":
-    with ingest() as ctx:
-        spew_flow(flow(ctx.parameters), ctx)

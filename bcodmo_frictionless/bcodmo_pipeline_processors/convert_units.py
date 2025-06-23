@@ -5,8 +5,6 @@ from decimal import Decimal
 
 from dataflows import Flow
 from dataflows.helpers.resource_matcher import ResourceMatcher
-from datapackage_pipelines.wrapper import ingest
-from datapackage_pipelines.utilities.flow_utils import spew_flow
 
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import get_missing_values
 
@@ -149,8 +147,3 @@ def flow(parameters):
             resources=parameters.get("resources"),
         )
     )
-
-
-if __name__ == "__main__":
-    with ingest() as ctx:
-        spew_flow(flow(ctx.parameters), ctx)

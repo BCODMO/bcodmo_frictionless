@@ -1,8 +1,6 @@
 import functools
 from dataflows import Flow, PackageWrapper
 from dataflows.helpers.resource_matcher import ResourceMatcher
-from datapackage_pipelines.wrapper import ingest
-from datapackage_pipelines.utilities.flow_utils import spew_flow
 
 
 def update_fields(fields, resources=None):
@@ -33,8 +31,3 @@ def flow(parameters):
     fields = parameters.pop("fields", {})
     resources = parameters.get("resources", None)
     return Flow(update_fields(fields, resources=resources))
-
-
-if __name__ == "__main__":
-    with ingest() as ctx:
-        spew_flow(flow(ctx.parameters), ctx)
