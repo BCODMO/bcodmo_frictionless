@@ -7,9 +7,10 @@ import sys
 import fnmatch
 from urllib.parse import unquote
 from dataflows import Flow, load as standard_load
-from datapackage_pipelines.utilities.resources import PROP_STREAMING, PROP_STREAMED_FROM
-from datapackage_pipelines.wrapper import ingest
-from datapackage_pipelines.utilities.flow_utils import spew_flow
+
+PROP_STREAMED_FROM = "dpp:streamedFrom"
+PROP_STREAMING = "dpp:streaming"
+
 
 # Imports for handling s3 excel sheet regex
 from six.moves.urllib.parse import urlparse
@@ -407,8 +408,3 @@ def flow(parameters):
     return Flow(
         load(_from, parameters),
     )
-
-
-if __name__ == "__main__":
-    with ingest() as ctx:
-        spew_flow(flow(ctx.parameters), ctx)

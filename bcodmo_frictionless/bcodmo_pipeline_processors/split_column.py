@@ -4,8 +4,6 @@ import re
 
 from dataflows import Flow
 from dataflows.helpers.resource_matcher import ResourceMatcher
-from datapackage_pipelines.wrapper import ingest
-from datapackage_pipelines.utilities.flow_utils import spew_flow
 
 from bcodmo_frictionless.bcodmo_pipeline_processors.boolean_processor_helper import (
     get_expression,
@@ -105,7 +103,11 @@ def split_column(fields, delete_input=False, resources=None, boolean_statement=N
                 # Create a list of names and a lookup dict for the new fields
                 new_field_names = [f for f in output_fields]
                 new_fields_dict = {
-                    f: {"name": f, "type": "string",} for f in output_fields
+                    f: {
+                        "name": f,
+                        "type": "string",
+                    }
+                    for f in output_fields
                 }
 
                 # Iterate through the old fields, updating where necessary to maintain order
@@ -155,8 +157,3 @@ def flow(parameters):
             boolean_statement=parameters.get("boolean_statement"),
         )
     )
-
-
-if __name__ == "__main__":
-    with ingest() as ctx:
-        spew_flow(flow(ctx.parameters), ctx)

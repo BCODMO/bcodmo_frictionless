@@ -9,8 +9,6 @@ import boto3
 import tempfile
 import hashlib
 from dataflows import Flow
-from datapackage_pipelines.wrapper import ingest
-from datapackage_pipelines.utilities.flow_utils import spew_flow
 from billiard import Process, Queue, Pool
 
 from dataflows.processors.dumpers.dumper_base import DumperBase
@@ -712,8 +710,3 @@ def flow(parameters):
     return Flow(
         S3Dumper(parameters.pop("bucket_name"), parameters.pop("prefix"), **parameters)
     )
-
-
-if __name__ == "__main__":
-    with ingest() as ctx:
-        spew_flow(flow(ctx.parameters), ctx)
