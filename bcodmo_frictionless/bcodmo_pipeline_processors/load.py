@@ -198,10 +198,18 @@ def load(_from, parameters):
                         f"Improperly formed S3 url passed to the load step: {p}"
                     )
 
+                path_parts = path.split("/", 1)
+                object_id = ""
+                if len(path_parts) > 0:
+                    object_id = path_parts[0]
                 s3 = get_s3()
                 bucket_obj = s3.Bucket(bucket)
                 matches = fnmatch.filter(
-                    [unquote(obj.key) for obj in bucket_obj.objects.all()], path
+                    [
+                        unquote(obj.key)
+                        for obj in bucket_obj.objects.filter(Prefix=object_id).all()
+                    ],
+                    path,
                 )
                 for match in matches:
                     temp_from_list.append(f"s3://{bucket}/{match}")

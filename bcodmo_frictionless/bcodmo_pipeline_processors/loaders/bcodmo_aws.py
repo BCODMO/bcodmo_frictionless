@@ -335,7 +335,6 @@ class BufferedS3ByteStream(io.RawIOBase):
 
         # Limit read to available data
         actual_size = min(size, self.size - self.position)
-
         with self.buffer_lock:
             # Try to get data from buffer
             data = self._get_data_from_buffer(self.position, actual_size)
