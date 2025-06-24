@@ -34,7 +34,7 @@ class NonStandardCharacter(object):
                         message = f"Non standard character {v} found"
                         if v == 133 or v == 160:
                             whitespace = True
-                            message = f"Non standard whitespace character {v} found. Try finding and replacing all whitespace characters with \s+"
+                            message = f"Non standard whitespace character {v} found. Try finding and replacing all whitespace characters with \\s+"
                         break
 
             if message:

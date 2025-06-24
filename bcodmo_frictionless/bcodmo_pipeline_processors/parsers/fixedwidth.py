@@ -115,7 +115,7 @@ class FixedWidthParser(Parser):
         for item in iter(items.readline, ""):
             last_item = item
             if self.__parse_seabird_header:
-                match = re.match("^# name \d* = (.*):.*$", item)
+                match = re.match(r"^# name \d* = (.*):.*$", item)
                 if match:
                     header_values.append(match.groups()[0])
 

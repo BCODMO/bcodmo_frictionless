@@ -27,7 +27,7 @@ BOOLEAN OPERATION
 # Set up a language logic for parsing boolean strings and mathematical expresion
 boolean_operator = Regex(">=|<=|!=|>|<|==").setName("boolean_operator")
 math_operator = Regex(">=|<=|!=|>|<|==").setName("math_operator")
-date = Regex("(\d+[/:\- ])+(\d+)?")
+date = Regex(r"(\d+[/:\- ])+(\d+)?")
 number = Regex(r"[+-]?\d+(:?\.\d*)?(:?[eE][+-]?\d+)?")
 variable = Regex(r"\{.*?\}")
 regex = Regex(r"re'.*?'")

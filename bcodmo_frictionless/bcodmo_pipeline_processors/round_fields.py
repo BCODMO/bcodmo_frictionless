@@ -88,7 +88,7 @@ def round_fields(fields, resources=None, boolean_statement=None):
                 package_fields = resource["schema"]["fields"]
                 for field in fields:
                     if field.get("convert_to_integer", False) and field["digits"] == 0:
-                        if field.get("digits") is not 0:
+                        if field.get("digits") != 0:
                             raise Exception(
                                 'The "convert_to_integer" flag cannot be used when "digits" is not 0'
                             )

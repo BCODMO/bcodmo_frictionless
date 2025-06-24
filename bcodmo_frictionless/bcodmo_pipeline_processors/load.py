@@ -85,6 +85,7 @@ def load(_from, parameters):
     _remove_empty_rows = parameters.pop("remove_empty_rows", True)
     _recursion_limit = parameters.pop("recursion_limit", False)
     _cache_id = parameters.pop("cache_id", None)
+    print("STARTING LOAD")
 
     if _cache_id:
         parameters["scheme"] = "bcodmo-aws"
@@ -252,14 +253,14 @@ def load(_from, parameters):
     else:
         name_len = len(_name.split(_input_separator))
         from_len = len(from_list)
-        if name_len is not 1 and name_len is not from_len:
+        if name_len != 1 and name_len != from_len:
             raise Exception(
                 f"The list of names has length {name_len} and the list of urls has length {from_len}. Please provide only one name or an equal number of names as the from list",
             )
 
         # Handle the names of the resources, if multiple
         names = []
-        if name_len is 1:
+        if name_len == 1:
             if from_len > 1:
                 for i in range(from_len):
                     resource_name = f"{_name}-{i + 1}"
@@ -283,7 +284,7 @@ def load(_from, parameters):
 
         sheet_range = False
         if type(sheet) == str:
-            sheet_range = re.match("\d-\d", sheet)
+            sheet_range = re.match(r"\d-\d", sheet)
 
         if (
             sheet_regex
@@ -322,7 +323,7 @@ def load(_from, parameters):
             else:
                 sheets_separate = sheet.split(sheet_separator)
                 for s in sheets_separate:
-                    if re.match("\d-\d", s):
+                    if re.match(r"\d-\d", s):
                         try:
                             start, end = [
                                 int(sheet_number) for sheet_number in s.split("-", 1)
@@ -398,6 +399,7 @@ def load(_from, parameters):
     if _remove_empty_rows:
         params.append(remove_empty_rows(resource_names))
 
+    print("ENDING LOAD")
     return Flow(
         *params,
     )
