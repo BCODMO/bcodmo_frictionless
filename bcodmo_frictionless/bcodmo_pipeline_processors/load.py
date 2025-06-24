@@ -85,7 +85,6 @@ def load(_from, parameters):
     _remove_empty_rows = parameters.pop("remove_empty_rows", True)
     _recursion_limit = parameters.pop("recursion_limit", False)
     _cache_id = parameters.pop("cache_id", None)
-    print("STARTING LOAD")
 
     if _cache_id:
         parameters["scheme"] = "bcodmo-aws"
@@ -399,7 +398,6 @@ def load(_from, parameters):
     if _remove_empty_rows:
         params.append(remove_empty_rows(resource_names))
 
-    print("ENDING LOAD")
     return Flow(
         *params,
     )
