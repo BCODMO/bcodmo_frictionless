@@ -137,6 +137,10 @@ class S3Dumper(DumperBase):
         self.delete = options.get("delete", False)
         self.limit_yield = options.get("limit_yield", None)
         self.unique_lat_lons = {} if options.get("dump_unique_lat_lon", None) else None
+        # Keep track of the unique lat lons
+        self.unique_lat_lons_found = (
+            False if options.get("dump_unique_lat_lon", None) else True
+        )
 
         self.prefix = prefix
         self.bucket_name = bucket_name
@@ -223,6 +227,10 @@ class S3Dumper(DumperBase):
         return datapackage
 
     def handle_datapackage(self):
+        if self.unique_lat_lons is not None and not self.unique_lat_lons_found:
+            raise Exception(
+                "Missing primary longitude or primary latitude fields in the datapackage. Either properly define the primary fields using updateFields or do not select dump unique lat lon in the dump_to_s3 processor"
+            )
         etags = {}
         filesizes = {}
         self.pool.close()
@@ -272,6 +280,93 @@ class S3Dumper(DumperBase):
                     progress_key, REDIS_PROGRESS_SAVING_DONE_FLAG, ex=REDIS_EXPIRES
                 )
 
+        if self.unique_lat_lons is not None:
+            new_resources = []
+            for resource in self.datapackage.descriptor["resources"]:
+                if resource_name in self.unique_lat_lons:
+                    lat_lons = self.unique_lat_lons[resource_name]
+                    resource_name = resource["name"]
+                    output = io.StringIO()
+
+                    # Create CSV writer
+                    writer = csv.writer(output)
+                    # Write headers
+                    writer.writerow(["latitude", "longitude"])
+
+                    # Write data rows
+                    for lat, lon in lat_lons:
+                        writer.writerow([lat, lon])
+                    csv_string = output.getvalue()
+                    output.close()
+                    csv_bytes = csv_string.encode()
+                    size = len(csv_bytes)
+                    name = f"{resource_name}.unique_lat_lon"
+                    filesizes[name] = size
+                    filename = f"{name}.csv"
+                    _, _, etag = self.write_file_to_output(
+                        csv_bytes, filename, "text/csv"
+                    )
+                    etags[name] = etag
+                    new_resources.append(
+                        {
+                            "name": name,
+                            "path": filename,
+                            "format": "csv",
+                            "bytes": size,
+                            "encoding": "utf-8",
+                            "profile": "tabular-data-resource",
+                            "schema": {
+                                "fields": [
+                                    {
+                                        "format": "default",
+                                        "name": "latitude",
+                                        "type": "string",
+                                    },
+                                    {
+                                        "format": "default",
+                                        "name": "longitude",
+                                        "type": "string",
+                                    },
+                                ]
+                            },
+                            "bcodmo:": {
+                                "unique_lat_lon": True,
+                            },
+                        }
+                    )
+            for res in new_resources:
+                self.datapackage.add_resource(res)
+                self.datapackage.commit()
+
+        if self.save_pipeline_spec and self.pipeline_spec:
+            # self from pipeline_spec inputted
+            try:
+                # Write the pipeline_spec to the temp file
+                contents = self.pipeline_spec.encode()
+                size = len(contents)
+                _, _, etag = self.write_file_to_output(
+                    contents, "pipeline-spec.yaml", "text/yaml"
+                )
+                filesizes["pipeline-spec.yaml"] = size
+                etags["pipeline-spec.yaml"] = etag
+                self.datapackage.add_resource(
+                    {
+                        "name": "pipeline-spec.yaml",
+                        "path": "pipeline-spec.yaml",
+                        "format": "yaml",
+                        "bytes": size,
+                        "encoding": "utf-8",
+                        "bcodmo:": {
+                            "pipeline_spec": True,
+                        },
+                    }
+                )
+                self.datapackage.commit()
+            except Exception as e:
+                logging.warn(
+                    f"Failed to save the pipeline-spec.yaml: {str(e)}",
+                )
+
         for resource_descriptor in self.datapackage.descriptor["resources"]:
             resource_name = resource_descriptor["name"]
             filesize = filesizes.get(resource_name, 0)
@@ -291,17 +386,6 @@ class S3Dumper(DumperBase):
                     etag,
                 )
 
-        if self.save_pipeline_spec and self.pipeline_spec:
-            # self from pipeline_spec inputted
-            try:
-                # Write the pipeline_spec to the temp file
-                contents = self.pipeline_spec.encode()
-                self.write_file_to_output(contents, "pipeline-spec.yaml", "text/yaml")
-            except Exception as e:
-                logging.warn(
-                    f"Failed to save the pipeline-spec.yaml: {str(e)}",
-                )
-
         self.datapackage.descriptor["dump_path"] = self.prefix
         self.datapackage.descriptor["dump_bucket"] = self.bucket_name
         self.datapackage.commit()
@@ -309,11 +393,12 @@ class S3Dumper(DumperBase):
         # Handle temporal_format_property
         if self.temporal_format_property:
             for resource in self.datapackage.descriptor["resources"]:
-                for field in resource["schema"]["fields"]:
-                    if field.get("type") in ["datetime", "date", "time"]:
-                        format = field.get(self.temporal_format_property, None)
-                        if format:
-                            field["format"] = format
+                if "schema" in resource:
+                    for field in resource["schema"]["fields"]:
+                        if field.get("type") in ["datetime", "date", "time"]:
+                            format = field.get(self.temporal_format_property, None)
+                            if format:
+                                field["format"] = format
             self.datapackage.commit()
 
         stream = io.StringIO()
@@ -331,28 +416,6 @@ class S3Dumper(DumperBase):
         )
 
         self.write_file_to_output(contents, "datapackage.json", "application/json")
-
-        if self.unique_lat_lons is not None:
-            for resource in self.datapackage.descriptor["resources"]:
-                if resource_name in self.unique_lat_lons:
-                    lat_lons = self.unique_lat_lons[resource_name]
-                    resource_name = resource["name"]
-                    output = io.StringIO()
-
-                    # Create CSV writer
-                    writer = csv.writer(output)
-                    # Write headers
-                    writer.writerow(["latitude", "longitude"])
-
-                    # Write data rows
-                    for lat, lon in lat_lons:
-                        writer.writerow([lat, lon])
-                    csv_string = output.getvalue()
-                    output.close()
-                    csv_bytes = csv_string.encode()
-                    self.write_file_to_output(
-                        csv_bytes, f"{resource_name}.unique_lat_lon.csv", "text/csv"
-                    )
 
         super(S3Dumper, self).handle_datapackage()
 
@@ -372,10 +435,11 @@ class S3Dumper(DumperBase):
 
         start = time.time()
         obj = self.s3.Object(self.bucket_name, obj_name)
-        obj.put(Body=contents, ContentType=content_type)
+        r = obj.put(Body=contents, ContentType=content_type)
+        etag = r["ETag"]
 
         print(f"Took {round(time.time() -start, 3)} to upload {path}")
-        return path, len(contents)
+        return path, len(contents), etag
 
     @staticmethod
     def write_file(contents, object_key, content_type, bucket_name):
@@ -548,6 +612,7 @@ class S3Dumper(DumperBase):
                     lon_field_name = field.get("name", "")
 
             if lat_field_name and lon_field_name:
+                self.unique_lat_lons_found = True
                 self.unique_lat_lons[resource_name] = set()
             else:
                 if not lat_field_name and lon_field_name:
@@ -559,9 +624,6 @@ class S3Dumper(DumperBase):
                     raise Exception(
                         "Missing primary longitude field in the datapackage. Either properly define the primary longitude field using updateFields or do not select dump unique lat lon in the dump_to_s3 processor"
                     )
-                raise Exception(
-                    "Missing primary longitude and primary latitude fields in the datapackage. Either properly define the primary fields using updateFields or do not select dump unique lat lon in the dump_to_s3 processor"
-                )
         path = resource.res.source
         if path.startswith("."):
             path = path[1:]
