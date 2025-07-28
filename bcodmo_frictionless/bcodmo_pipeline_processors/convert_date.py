@@ -309,21 +309,48 @@ def convert_date(fields, resources=None, boolean_statement=None):
             if matcher.match(resource["name"]):
                 package_fields = resource["schema"]["fields"]
 
+                # Create field name -> field lookup dictionary for efficient access
+                package_fields_lookup = {f["name"]: f for f in package_fields}
+
                 # Create a list of names and a lookup dict for the new fields
                 new_field_names = [f["output_field"] for f in fields]
-                new_fields_dict = {
-                    f["output_field"]: {
-                        "name": f["output_field"],
-                        "type": f.get("output_type", "datetime"),
-                        "outputFormat": f["output_format"],
-                    }
-                    if f.get("output_type") != "string"
-                    else {
-                        "name": f["output_field"],
-                        "type": "string",
-                    }
-                    for f in fields
-                }
+                new_fields_dict = {}
+
+                for field_config in fields:
+                    output_field = field_config["output_field"]
+
+                    # Create base field definition
+                    if field_config.get("output_type") != "string":
+                        new_field = {
+                            "name": output_field,
+                            "type": field_config.get("output_type", "datetime"),
+                            "outputFormat": field_config["output_format"],
+                        }
+                    else:
+                        new_field = {
+                            "name": output_field,
+                            "type": "string",
+                        }
+
+                    # Handle metadata preservation
+                    if field_config.get("preserve_metadata", False):
+                        # Find the original field to get metadata from
+                        original_field_name = None
+                        if "input_field" in field_config:
+                            original_field_name = field_config["input_field"]
+                        elif (
+                            "inputs" in field_config and len(field_config["inputs"]) > 0
+                        ):
+                            # Use the first input field for metadata source
+                            original_field_name = field_config["inputs"][0]["field"]
+
+                        if original_field_name and original_field_name in package_fields_lookup:
+                            orig_field = package_fields_lookup[original_field_name]
+                            # Transfer bcodmo: metadata if it exists
+                            if "bcodmo:" in orig_field:
+                                new_field["bcodmo:"] = orig_field["bcodmo:"]
+
+                    new_fields_dict[output_field] = new_field
 
                 # Iterate through the old fields, updating where necessary to maintain order
                 processed_fields = []
