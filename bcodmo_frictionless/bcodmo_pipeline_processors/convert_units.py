@@ -102,6 +102,10 @@ def convert_units(fields, resources=None):
                     field_dict[field["name"]] = field
 
                 package_fields = resource["schema"]["fields"]
+                
+                # Create field name -> field lookup dictionary for efficient access
+                package_fields_lookup = {f["name"]: f for f in package_fields}
+                
                 new_package_fields = []
                 previous_field_names = set([f["name"] for f in package_fields])
                 for package_field in package_fields:
@@ -126,7 +130,22 @@ def convert_units(fields, resources=None):
                                 # Only create the field if it's different than the original field
                                 new_package_field = copy.deepcopy(package_field)
                                 new_package_field["name"] = new_field_name
+                                
+                                # Handle metadata preservation for new field
+                                if field.get("preserve_metadata", False):
+                                    # Metadata is already copied via deepcopy, so we keep it
+                                    pass
+                                else:
+                                    # Remove bcodmo: metadata if preserve_metadata is False
+                                    if "bcodmo:" in new_package_field:
+                                        del new_package_field["bcodmo:"]
+                                
                                 new_package_fields.append(new_package_field)
+                        else:
+                            # Handle metadata preservation for field modification (preserve_field=False)
+                            if field.get("preserve_metadata", False):
+                                # Metadata is already preserved since we're modifying the existing field
+                                pass
 
                 resource["schema"]["fields"] = new_package_fields
         yield package.pkg

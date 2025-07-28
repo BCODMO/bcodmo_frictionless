@@ -55,7 +55,7 @@ def process_resource(rows, fields, missing_values, suffix=None, boolean_statemen
             )
 
 
-def extract_nonnumeric(fields, resources=None, suffix="_", boolean_statement=None):
+def extract_nonnumeric(fields, resources=None, suffix="_", boolean_statement=None, preserve_metadata=False):
     def func(package):
         matcher = ResourceMatcher(resources, package.pkg)
         for resource in package.pkg.descriptor["resources"]:
@@ -63,6 +63,10 @@ def extract_nonnumeric(fields, resources=None, suffix="_", boolean_statement=Non
                 # Get the old fields
                 package_fields = resource["schema"]["fields"]
                 package_field_names = [f["name"] for f in package_fields]
+                
+                # Create field name -> field lookup dictionary for efficient access
+                package_fields_lookup = {f["name"]: f for f in package_fields}
+                
                 new_fields = []
                 for field in package_fields:
                     new_fields.append(field)
@@ -72,12 +76,23 @@ def extract_nonnumeric(fields, resources=None, suffix="_", boolean_statement=Non
                             raise Exception(
                                 f'The new field "{new_field_name}" already exists in the datapackage.'
                             )
-                        new_fields.append(
-                            {
-                                "name": new_field_name,
-                                "type": "string",
-                            }
-                        )
+                        
+                        # Create new field definition
+                        new_field = {
+                            "name": new_field_name,
+                            "type": "string",
+                        }
+                        
+                        # Handle metadata preservation
+                        if preserve_metadata:
+                            original_field_name = field.get("name")
+                            if original_field_name and original_field_name in package_fields_lookup:
+                                orig_field = package_fields_lookup[original_field_name]
+                                # Transfer bcodmo: metadata if it exists
+                                if "bcodmo:" in orig_field:
+                                    new_field["bcodmo:"] = orig_field["bcodmo:"]
+                        
+                        new_fields.append(new_field)
 
                 # Add back to the datapackage
                 resource["schema"]["fields"] = new_fields
@@ -106,5 +121,6 @@ def flow(parameters):
             resources=parameters.get("resources"),
             suffix=parameters.get("suffix", "_"),
             boolean_statement=parameters.get("boolean_statement"),
+            preserve_metadata=parameters.get("preserve_metadata", False),
         )
     )

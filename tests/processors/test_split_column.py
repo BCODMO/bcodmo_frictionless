@@ -104,3 +104,99 @@ def test_split_delimiter_regex():
     rows, datapackage, _ = Flow(*flows).results()
     assert rows[0][0]["f1"] == "hello"
     assert rows[0][0]["f2"] == "world"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_split_column_preserve_metadata():
+    # Test that metadata is preserved when preserve_metadata=True
+    flows = [
+        data,
+        update_fields({
+            "fields": {
+                "col1": {
+                    "bcodmo:": {
+                        "units": "string",
+                        "description": "Original combined field"
+                    }
+                }
+            }
+        }),
+        split_column(
+            {
+                "fields": [
+                    {
+                        "input_field": "col1",
+                        "pattern": "(.*) (.*)",
+                        "output_fields": ["f1", "f2"],
+                        "preserve_metadata": True,
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    
+    # Check that both new fields have the metadata from the original field
+    f1_field = None
+    f2_field = None
+    for field in datapackage.resources[0].schema.fields:
+        if field.name == "f1":
+            f1_field = field
+        elif field.name == "f2":
+            f2_field = field
+    
+    assert f1_field is not None
+    assert "bcodmo:" in f1_field.descriptor
+    assert f1_field.descriptor["bcodmo:"]["units"] == "string"
+    assert f1_field.descriptor["bcodmo:"]["description"] == "Original combined field"
+    
+    assert f2_field is not None
+    assert "bcodmo:" in f2_field.descriptor
+    assert f2_field.descriptor["bcodmo:"]["units"] == "string"
+    assert f2_field.descriptor["bcodmo:"]["description"] == "Original combined field"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_split_column_preserve_metadata_false():
+    # Test that metadata is NOT preserved when preserve_metadata=False
+    flows = [
+        data,
+        update_fields({
+            "fields": {
+                "col1": {
+                    "bcodmo:": {
+                        "units": "string",
+                        "description": "Original combined field"
+                    }
+                }
+            }
+        }),
+        split_column(
+            {
+                "fields": [
+                    {
+                        "input_field": "col1",
+                        "pattern": "(.*) (.*)",
+                        "output_fields": ["f1", "f2"],
+                        "preserve_metadata": False,
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    
+    # Check that the new fields do NOT have metadata
+    f1_field = None
+    f2_field = None
+    for field in datapackage.resources[0].schema.fields:
+        if field.name == "f1":
+            f1_field = field
+        elif field.name == "f2":
+            f2_field = field
+    
+    assert f1_field is not None
+    assert "bcodmo:" not in f1_field.descriptor
+    
+    assert f2_field is not None
+    assert "bcodmo:" not in f2_field.descriptor

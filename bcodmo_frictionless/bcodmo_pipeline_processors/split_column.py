@@ -99,16 +99,34 @@ def split_column(fields, delete_input=False, resources=None, boolean_statement=N
             if matcher.match(resource["name"]):
                 # Get the old fields
                 package_fields = resource["schema"]["fields"]
+                
+                # Create field name -> field lookup dictionary for efficient access
+                package_fields_lookup = {f["name"]: f for f in package_fields}
 
                 # Create a list of names and a lookup dict for the new fields
                 new_field_names = [f for f in output_fields]
-                new_fields_dict = {
-                    f: {
-                        "name": f,
-                        "type": "string",
-                    }
-                    for f in output_fields
-                }
+                new_fields_dict = {}
+                
+                for field_config in fields:
+                    input_field = field_config.get("input_field")
+                    field_output_fields = field_config.get("output_fields", [])
+                    preserve_metadata = field_config.get("preserve_metadata", False)
+                    
+                    for output_field in field_output_fields:
+                        # Create base field definition
+                        new_field = {
+                            "name": output_field,
+                            "type": "string",
+                        }
+                        
+                        # Handle metadata preservation
+                        if preserve_metadata and input_field and input_field in package_fields_lookup:
+                            orig_field = package_fields_lookup[input_field]
+                            # Transfer bcodmo: metadata if it exists
+                            if "bcodmo:" in orig_field:
+                                new_field["bcodmo:"] = orig_field["bcodmo:"]
+                        
+                        new_fields_dict[output_field] = new_field
 
                 # Iterate through the old fields, updating where necessary to maintain order
                 processed_fields = []

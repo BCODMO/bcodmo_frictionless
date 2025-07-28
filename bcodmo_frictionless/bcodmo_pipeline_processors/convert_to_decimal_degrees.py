@@ -177,16 +177,32 @@ def convert_to_decimal_degrees(fields, resources=None, boolean_statement=None):
             if matcher.match(resource["name"]):
                 # Get the old fields
                 package_fields = resource["schema"]["fields"]
+                
+                # Create field name -> field lookup dictionary for efficient access
+                package_fields_lookup = {f["name"]: f for f in package_fields}
 
                 # Create a list of names and a lookup dict for the new fields
                 new_field_names = [f["output_field"] for f in fields]
-                new_fields_dict = {
-                    f["output_field"]: {
-                        "name": f["output_field"],
+                new_fields_dict = {}
+                
+                for field_config in fields:
+                    output_field = field_config["output_field"]
+                    input_field = field_config.get("input_field")
+                    
+                    # Create base field definition
+                    new_field = {
+                        "name": output_field,
                         "type": "number",
                     }
-                    for f in fields
-                }
+                    
+                    # Handle metadata preservation
+                    if field_config.get("preserve_metadata", False) and input_field and input_field in package_fields_lookup:
+                        orig_field = package_fields_lookup[input_field]
+                        # Transfer bcodmo: metadata if it exists
+                        if "bcodmo:" in orig_field:
+                            new_field["bcodmo:"] = orig_field["bcodmo:"]
+                    
+                    new_fields_dict[output_field] = new_field
 
                 # Iterate through the old fields, updating where necessary to maintain order
                 processed_fields = []

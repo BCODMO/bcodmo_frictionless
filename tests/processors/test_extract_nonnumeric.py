@@ -34,3 +34,73 @@ def test_extract_nonnumeric():
     fields = datapackage.resources[0].schema.fields
     assert fields[0].name == "col1"
     assert fields[1].name == "col1_comment"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_extract_nonnumeric_preserve_metadata():
+    # Test that metadata is preserved when preserve_metadata=True
+    flows = [
+        data,
+        update_fields({
+            "fields": {
+                "col1": {
+                    "bcodmo:": {
+                        "units": "mixed",
+                        "description": "Numeric field with occasional text comments"
+                    }
+                }
+            }
+        }),
+        extract_nonnumeric({
+            "fields": ["col1"], 
+            "suffix": "_comment", 
+            "preserve_metadata": True
+        }),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    
+    # Check that the new field has the metadata from the original field
+    comment_field = None
+    for field in datapackage.resources[0].schema.fields:
+        if field.name == "col1_comment":
+            comment_field = field
+            break
+    
+    assert comment_field is not None
+    assert "bcodmo:" in comment_field.descriptor
+    assert comment_field.descriptor["bcodmo:"]["units"] == "mixed"
+    assert comment_field.descriptor["bcodmo:"]["description"] == "Numeric field with occasional text comments"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_extract_nonnumeric_preserve_metadata_false():
+    # Test that metadata is NOT preserved when preserve_metadata=False
+    flows = [
+        data,
+        update_fields({
+            "fields": {
+                "col1": {
+                    "bcodmo:": {
+                        "units": "mixed",
+                        "description": "Numeric field with occasional text comments"
+                    }
+                }
+            }
+        }),
+        extract_nonnumeric({
+            "fields": ["col1"], 
+            "suffix": "_comment", 
+            "preserve_metadata": False
+        }),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    
+    # Check that the new field does NOT have metadata
+    comment_field = None
+    for field in datapackage.resources[0].schema.fields:
+        if field.name == "col1_comment":
+            comment_field = field
+            break
+    
+    assert comment_field is not None
+    assert "bcodmo:" not in comment_field.descriptor

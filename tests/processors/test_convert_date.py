@@ -41,6 +41,9 @@ data_8 = [{"col1": "737117.593762207"}]
 # Bug with set types
 data_9 = [{"col1": "2018-02-17", "col2": "05:54:44"}]
 
+# preserve_metadata test
+data_10 = [{"col1": "12/31/1995 11:24:31"}]
+
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_convert_date_datetime():
@@ -407,3 +410,135 @@ def test_convert_date_string():
         "%Y-%m-%dT%H:%M:%SZ"
     )
     assert datapackage.resources[0].schema.fields[2].type == "string"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_convert_date_preserve_metadata():
+    # Test that metadata is preserved when preserve_metadata is True
+    flows = [
+        data_10,
+        update_fields({
+            "fields": {
+                "col1": {
+                    "bcodmo:": {
+                        "units": "datetime",
+                        "description": "Original datetime field with metadata"
+                    }
+                }
+            }
+        }),
+        convert_date(
+            {
+                "fields": [
+                    {
+                        "inputs": [{"field": "col1", "format": "%m/%d/%Y %H:%M:%S"}],
+                        "output_field": "datetime_field",
+                        "output_format": "%Y-%m-%dT%H:%M:%SZ",
+                        "output_type": "datetime",
+                        "preserve_metadata": True,
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    
+    # Check that the new field has the metadata from the original field
+    datetime_field = None
+    for field in datapackage.resources[0].schema.fields:
+        if field.name == "datetime_field":
+            datetime_field = field
+            break
+    
+    assert datetime_field is not None
+    assert "bcodmo:" in datetime_field.descriptor
+    assert datetime_field.descriptor["bcodmo:"]["units"] == "datetime"
+    assert datetime_field.descriptor["bcodmo:"]["description"] == "Original datetime field with metadata"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_convert_date_preserve_metadata_false():
+    # Test that metadata is NOT preserved when preserve_metadata is False or omitted
+    flows = [
+        data_10,
+        update_fields({
+            "fields": {
+                "col1": {
+                    "bcodmo:": {
+                        "units": "datetime",
+                        "description": "Original datetime field with metadata"
+                    }
+                }
+            }
+        }),
+        convert_date(
+            {
+                "fields": [
+                    {
+                        "inputs": [{"field": "col1", "format": "%m/%d/%Y %H:%M:%S"}],
+                        "output_field": "datetime_field",
+                        "output_format": "%Y-%m-%dT%H:%M:%SZ",
+                        "output_type": "datetime",
+                        "preserve_metadata": False,
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    
+    # Check that the new field does NOT have metadata
+    datetime_field = None
+    for field in datapackage.resources[0].schema.fields:
+        if field.name == "datetime_field":
+            datetime_field = field
+            break
+    
+    assert datetime_field is not None
+    assert "bcodmo:" not in datetime_field.descriptor
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_convert_date_preserve_metadata_input_field():
+    # Test preserve_metadata with single input_field (backwards compatibility)
+    flows = [
+        data_4,  # decimalDay data
+        update_fields({
+            "fields": {
+                "col1": {
+                    "bcodmo:": {
+                        "units": "decimal_day",
+                        "description": "Original decimal day field"
+                    }
+                }
+            }
+        }),
+        convert_date(
+            {
+                "fields": [
+                    {
+                        "input_type": "decimalDay",
+                        "input_field": "col1",
+                        "output_field": "datetime_field",
+                        "output_format": "%Y-%m-%dT%H:%M:%SZ",
+                        "output_type": "datetime",
+                        "year": "1995",
+                        "preserve_metadata": True,
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    
+    # Check that the new field has the metadata from the original field
+    datetime_field = None
+    for field in datapackage.resources[0].schema.fields:
+        if field.name == "datetime_field":
+            datetime_field = field
+            break
+    
+    assert datetime_field is not None
+    assert "bcodmo:" in datetime_field.descriptor
+    assert datetime_field.descriptor["bcodmo:"]["units"] == "decimal_day"
+    assert datetime_field.descriptor["bcodmo:"]["description"] == "Original decimal day field"
