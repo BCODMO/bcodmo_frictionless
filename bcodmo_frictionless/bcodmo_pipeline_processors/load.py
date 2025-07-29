@@ -205,6 +205,7 @@ def load(_from, parameters):
                     object_id = path_parts[0]
                 s3 = get_s3()
                 bucket_obj = s3.Bucket(bucket)
+
                 matches = fnmatch.filter(
                     [
                         unquote(obj.key)

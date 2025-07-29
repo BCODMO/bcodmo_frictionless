@@ -9,7 +9,7 @@ import os
 from dataflows import Flow
 from dataflows.base import exceptions as dataflow_exceptions
 from decimal import Decimal
-from moto import mock_s3
+from moto import mock_aws
 from tabulator.exceptions import IOError as TabulatorIOError
 import logging
 import io
@@ -23,7 +23,7 @@ from bcodmo_frictionless.bcodmo_pipeline_processors import *
 TEST_DEV = os.environ.get("TEST_DEV", False) == "true"
 
 
-@mock_s3
+@mock_aws
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_set_types():
     os.environ["LAMINAR_S3_HOST"] = ""

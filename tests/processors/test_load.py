@@ -4,7 +4,7 @@ import os
 from dataflows import Flow
 from dataflows.base import exceptions as dataflow_exceptions
 from decimal import Decimal
-from moto import mock_s3
+from moto import mock_aws
 from tabulator.exceptions import IOError as TabulatorIOError
 import logging
 
@@ -292,7 +292,7 @@ def test_load_seabird_infer_bug():
     assert rows[0][107]["t090C"] == "10.0697"
 
 
-@mock_s3
+@mock_aws
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_load_s3():
     # create bucket and put objects
@@ -335,21 +335,21 @@ def test_load_s3():
     assert len(datapackage.resources) == 1
 
 
-@mock_s3
+@mock_aws
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_load_s3_path():
     # create bucket and put objects
     conn = boto3.client("s3")
     conn.create_bucket(Bucket="testing_bucket")
     # add the file
-    conn.upload_file("data/test.csv", "testing_bucket", "test1.csv")
-    conn.upload_file("data/test.csv", "testing_bucket", "test2.csv")
-    conn.upload_file("data/test.csv", "testing_bucket", "test3.csv")
+    conn.upload_file("data/test.csv", "testing_bucket", "1/test1.csv")
+    conn.upload_file("data/test.csv", "testing_bucket", "1/test2.csv")
+    conn.upload_file("data/test.csv", "testing_bucket", "1/test3.csv")
 
     flows = [
         load(
             {
-                "from": "s3://testing_bucket/*.csv",
+                "from": "s3://testing_bucket/1/*.csv",
                 "name": "res",
                 "format": "csv",
                 "input_path_pattern": True,
@@ -361,7 +361,7 @@ def test_load_s3_path():
     assert len(datapackage.resources) == 3
 
 
-@mock_s3
+@mock_aws
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_load_s3_path_xlsx_regex():
     # create bucket and put objects
@@ -378,7 +378,6 @@ def test_load_s3_path_xlsx_regex():
                 "format": "xlsx",
                 "sheet": r"test\d",
                 "sheet_regex": True,
-                "cache_id": "123",
             }
         )
     ]
@@ -553,7 +552,7 @@ def test_load_xlsx_scientific_notation():
     assert str(rows[0][0]["scientific_notation"]) == "4.273E-07"
 
 
-@mock_s3
+@mock_aws
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_load_s3_path_xlsx_regex_object_spaces():
     # create bucket and put objects
@@ -620,6 +619,7 @@ def test_load_regex_csv():
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_load_regex_csv_capture_skipped_rows():
+    # Ensure that custom tabulator-py is installed in environment before running this test
     flows = [
         load(
             {

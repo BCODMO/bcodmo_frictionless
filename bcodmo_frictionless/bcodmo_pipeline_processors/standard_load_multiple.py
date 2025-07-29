@@ -191,6 +191,7 @@ class standard_load_multiple(standard_load):
                 stream: Stream = Stream(self.load_source, **options).open()
                 """ Finish change to add preloaded data """
 
+
                 if len(stream.headers) != len(set(stream.headers)):
                     if not self.deduplicate_headers:
                         raise ValueError(

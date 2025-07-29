@@ -9,7 +9,7 @@ import os
 from dataflows import Flow
 from dataflows.base import exceptions as dataflow_exceptions
 from decimal import Decimal
-from moto import mock_s3
+from moto import mock_aws
 from tabulator.exceptions import IOError as TabulatorIOError
 import logging
 import io
@@ -23,7 +23,7 @@ from bcodmo_frictionless.bcodmo_pipeline_processors import *
 TEST_DEV = os.environ.get("TEST_DEV", False) == "true"
 
 
-@mock_s3
+@mock_aws
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_dump_s3():
     # create bucket and put objects
@@ -60,7 +60,7 @@ def test_dump_s3():
     assert datapackage.descriptor["count_of_rows"] == 4
 
 
-@mock_s3
+@mock_aws
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_dump_s3_hash():
     # create bucket and put objects
@@ -104,7 +104,7 @@ def test_dump_s3_hash():
     assert md5.hexdigest() == datapackage.resources[0].descriptor["hash"]
 
 
-@mock_s3
+@mock_aws
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_dump_scientific_notation():
     server = ThreadedMotoServer()
@@ -247,7 +247,7 @@ data_1 = [
 ]
 
 
-@mock_s3
+@mock_aws
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_dump_scientific_notation_negative():
     server = ThreadedMotoServer()
@@ -291,7 +291,7 @@ def test_dump_scientific_notation_negative():
     server.stop()
 
 
-@mock_s3
+@mock_aws
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_large_dump_s3():
     # There was an issue with multipart upload
