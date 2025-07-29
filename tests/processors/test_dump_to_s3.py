@@ -298,51 +298,63 @@ def test_large_dump_s3():
     server = ThreadedMotoServer()
     server.start()
     os.environ["LAMINAR_S3_HOST"] = "http://localhost:5000"
+    
+    # Disable checksum validation to fix moto compatibility issues
+    # Monkey patch the checksum validation to avoid moto checksum mismatch
+    import botocore.httpchecksum
+    original_validate = botocore.httpchecksum.StreamingChecksumBody._validate_checksum
+    def mock_validate_checksum(self):
+        pass  # Skip checksum validation for moto
+    botocore.httpchecksum.StreamingChecksumBody._validate_checksum = mock_validate_checksum
+    
+    try:
+        # create bucket and put objects
+        conn = boto3.client("s3", endpoint_url="http://localhost:5000")
+        conn.create_bucket(Bucket="testing_bucket")
+        conn.create_bucket(Bucket="testing_dump_bucket")
+        f = io.StringIO()
+        writer = csv.writer(f)
+        header = [["a", "b", "c", "d"]]
+        num_rows = 1000000
+        rows = [[1, 2, 3, 4, 5]] * num_rows
+        writer.writerows(header + rows)
+        f.seek(0)
+        f = io.BytesIO(f.read().encode("utf-8"))
 
-    # create bucket and put objects
-    conn = boto3.client("s3", endpoint_url="http://localhost:5000")
-    conn.create_bucket(Bucket="testing_bucket")
-    conn.create_bucket(Bucket="testing_dump_bucket")
-    f = io.StringIO()
-    writer = csv.writer(f)
-    header = [["a", "b", "c", "d"]]
-    num_rows = 1000000
-    rows = [[1, 2, 3, 4, 5]] * num_rows
-    writer.writerows(header + rows)
-    f.seek(0)
-    f = io.BytesIO(f.read().encode("utf-8"))
+        conn.upload_fileobj(f, "testing_bucket", "test.csv")
 
-    conn.upload_fileobj(f, "testing_bucket", "test.csv")
+        flows = [
+            load(
+                {
+                    "from": "s3://testing_bucket/test.csv",
+                    "name": "res",
+                    "format": "csv",
+                }
+            ),
+            dump_to_s3(
+                {
+                    "prefix": "test",
+                    "force-format": True,
+                    "format": "csv",
+                    "save_pipeline_spec": True,
+                    "temporal_format_property": "outputFormat",
+                    "bucket_name": "testing_dump_bucket",
+                    "data_manager": "test",
+                }
+            ),
+        ]
 
-    flows = [
-        load(
-            {
-                "from": "s3://testing_bucket/test.csv",
-                "name": "res",
-                "format": "csv",
-            }
-        ),
-        dump_to_s3(
-            {
-                "prefix": "test",
-                "force-format": True,
-                "format": "csv",
-                "save_pipeline_spec": True,
-                "temporal_format_property": "outputFormat",
-                "bucket_name": "testing_dump_bucket",
-                "data_manager": "test",
-            }
-        ),
-    ]
+        rows, datapackage, _ = Flow(*flows).results()
+        body = (
+            conn.get_object(Bucket="testing_dump_bucket", Key="test/res.csv")["Body"]
+            .read()
+            .decode("utf-8")
+        )
 
-    rows, datapackage, _ = Flow(*flows).results()
-    body = (
-        conn.get_object(Bucket="testing_dump_bucket", Key="test/res.csv")["Body"]
-        .read()
-        .decode("utf-8")
-    )
-
-    assert len(body) == 8000008
-    assert len(datapackage.resources) == 1
-    assert datapackage.descriptor["count_of_rows"] == num_rows
-    server.stop()
+        assert len(body) == 8000008
+        assert len(datapackage.resources) == 1
+        assert datapackage.descriptor["count_of_rows"] == num_rows
+    finally:
+        # Restore original checksum validation
+        botocore.httpchecksum.StreamingChecksumBody._validate_checksum = original_validate
+        server.stop()
