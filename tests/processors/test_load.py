@@ -692,6 +692,7 @@ def test_load_csv_multiline_header():
     assert datapackage.resources[0].schema.fields[0].name == "1;5"
     assert datapackage.resources[0].schema.fields[2].name == "3;3"
 
+
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_floating_point_error():
     flows = [
@@ -701,6 +702,7 @@ def test_floating_point_error():
                 "name": "res",
                 "format": "xlsx",
                 "sheet": 1,
+                "adjust_floating_point_error": True,
                 "preserve_formatting": True,
                 "infer_strategy": "strings",
                 "cast_strategy": "strings",
@@ -712,3 +714,24 @@ def test_floating_point_error():
     assert len(rows) == 1
     assert str(rows[0][6]["Temp"]) == "23.5"
 
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_floating_point_error_2():
+    flows = [
+        load(
+            {
+                "from": "data/test_floating_point_error2.xlsx",
+                "name": "res",
+                "format": "xlsx",
+                "sheet": 1,
+                "adjust_floating_point_error": True,
+                "preserve_formatting": True,
+                "infer_strategy": "strings",
+                "cast_strategy": "strings",
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+
+    assert len(rows) == 1
+    assert str(rows[0][33]["ChlaYSI"]) == "1.23"
