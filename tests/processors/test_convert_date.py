@@ -360,7 +360,10 @@ def test_convert_date_set_types_bug():
                         "format": "%Y-%m-%d",
                         "outputFormat": "%Y-%m-%d",
                     },
-                    "col2": {"type": "time", "format": "%H:%M:%S",},
+                    "col2": {
+                        "type": "time",
+                        "format": "%H:%M:%S",
+                    },
                 }
             }
         ),
@@ -417,16 +420,18 @@ def test_convert_date_preserve_metadata():
     # Test that metadata is preserved when preserve_metadata is True
     flows = [
         data_10,
-        update_fields({
-            "fields": {
-                "col1": {
-                    "bcodmo:": {
-                        "units": "datetime",
-                        "description": "Original datetime field with metadata"
+        update_fields(
+            {
+                "fields": {
+                    "col1": {
+                        "bcodmo:": {
+                            "units": "datetime",
+                            "description": "Original datetime field with metadata",
+                        }
                     }
                 }
             }
-        }),
+        ),
         convert_date(
             {
                 "fields": [
@@ -442,18 +447,21 @@ def test_convert_date_preserve_metadata():
         ),
     ]
     rows, datapackage, _ = Flow(*flows).results()
-    
+
     # Check that the new field has the metadata from the original field
     datetime_field = None
     for field in datapackage.resources[0].schema.fields:
         if field.name == "datetime_field":
             datetime_field = field
             break
-    
+
     assert datetime_field is not None
     assert "bcodmo:" in datetime_field.descriptor
     assert datetime_field.descriptor["bcodmo:"]["units"] == "datetime"
-    assert datetime_field.descriptor["bcodmo:"]["description"] == "Original datetime field with metadata"
+    assert (
+        datetime_field.descriptor["bcodmo:"]["description"]
+        == "Original datetime field with metadata"
+    )
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
@@ -461,16 +469,18 @@ def test_convert_date_preserve_metadata_false():
     # Test that metadata is NOT preserved when preserve_metadata is False or omitted
     flows = [
         data_10,
-        update_fields({
-            "fields": {
-                "col1": {
-                    "bcodmo:": {
-                        "units": "datetime",
-                        "description": "Original datetime field with metadata"
+        update_fields(
+            {
+                "fields": {
+                    "col1": {
+                        "bcodmo:": {
+                            "units": "datetime",
+                            "description": "Original datetime field with metadata",
+                        }
                     }
                 }
             }
-        }),
+        ),
         convert_date(
             {
                 "fields": [
@@ -486,14 +496,14 @@ def test_convert_date_preserve_metadata_false():
         ),
     ]
     rows, datapackage, _ = Flow(*flows).results()
-    
+
     # Check that the new field does NOT have metadata
     datetime_field = None
     for field in datapackage.resources[0].schema.fields:
         if field.name == "datetime_field":
             datetime_field = field
             break
-    
+
     assert datetime_field is not None
     assert "bcodmo:" not in datetime_field.descriptor
 
@@ -503,16 +513,18 @@ def test_convert_date_preserve_metadata_input_field():
     # Test preserve_metadata with single input_field (backwards compatibility)
     flows = [
         data_4,  # decimalDay data
-        update_fields({
-            "fields": {
-                "col1": {
-                    "bcodmo:": {
-                        "units": "decimal_day",
-                        "description": "Original decimal day field"
+        update_fields(
+            {
+                "fields": {
+                    "col1": {
+                        "bcodmo:": {
+                            "units": "decimal_day",
+                            "description": "Original decimal day field",
+                        }
                     }
                 }
             }
-        }),
+        ),
         convert_date(
             {
                 "fields": [
@@ -530,15 +542,63 @@ def test_convert_date_preserve_metadata_input_field():
         ),
     ]
     rows, datapackage, _ = Flow(*flows).results()
-    
+
     # Check that the new field has the metadata from the original field
     datetime_field = None
     for field in datapackage.resources[0].schema.fields:
         if field.name == "datetime_field":
             datetime_field = field
             break
-    
+
     assert datetime_field is not None
     assert "bcodmo:" in datetime_field.descriptor
     assert datetime_field.descriptor["bcodmo:"]["units"] == "decimal_day"
-    assert datetime_field.descriptor["bcodmo:"]["description"] == "Original decimal day field"
+    assert (
+        datetime_field.descriptor["bcodmo:"]["description"]
+        == "Original decimal day field"
+    )
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_utc_time_convert():
+    flows = [
+        load(
+            {
+                "from": "data/test_utc_time_conversion.xlsx",
+                "name": "res",
+                "format": "xlsx",
+                "sheet": 1,
+                "infer_strategy": "strings",
+                "cast_strategy": "strings",
+                "headers": 10,
+                "preserve_formatting": True,
+            }
+        ),
+        convert_date(
+            {
+                "fields": [
+                    {
+                        "input_type": "python",
+                        "inputs": [
+                            {
+                                "field": "Time (HST)",
+                                "format": "%H:%M",
+                            }
+                        ],
+                        "input_timezone": "HST",
+                        "output_field": "Time_UTC",
+                        "output_format": "%H:%M",
+                        "output_type": "time",
+                        "output_timezone": "UTC",
+                        "year": "2000",
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert datapackage
+    assert len(datapackage.resources) == 1
+    assert datapackage.resources[0].name == "res"
+    assert rows[0][0]["Time (HST)"] == "10:26"
+    assert rows[0][0]["Time_UTC"] == datetime.time(20, 26)

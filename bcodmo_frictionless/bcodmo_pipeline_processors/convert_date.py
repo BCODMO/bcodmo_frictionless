@@ -130,6 +130,8 @@ def process_resource(
 
                     try:
                         date_obj = datetime.strptime(row_value, input_format)
+                        if year:
+                            date_obj = date_obj.replace(year=int(year))
                     except ValueError as e:
                         if year and str(e) == "day is out of range for month":
                             # Possible leap year date without year in string
@@ -156,11 +158,10 @@ def process_resource(
                                 )
                             )
                         else:
+                            print("IN HERE")
                             input_timezone_obj = pytz.timezone(input_timezone)
                             date_obj = input_timezone_obj.localize(date_obj)
 
-                    if year:
-                        date_obj = date_obj.replace(year=int(year))
                     if not output_timezone:
                         output_date_obj = date_obj
                     elif output_timezone == "UTC" and output_timezone_utc_offset:
@@ -344,7 +345,10 @@ def convert_date(fields, resources=None, boolean_statement=None):
                             # Use the first input field for metadata source
                             original_field_name = field_config["inputs"][0]["field"]
 
-                        if original_field_name and original_field_name in package_fields_lookup:
+                        if (
+                            original_field_name
+                            and original_field_name in package_fields_lookup
+                        ):
                             orig_field = package_fields_lookup[original_field_name]
                             # Transfer bcodmo: metadata if it exists
                             if "bcodmo:" in orig_field:
