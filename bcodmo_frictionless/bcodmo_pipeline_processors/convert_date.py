@@ -158,7 +158,6 @@ def process_resource(
                                 )
                             )
                         else:
-                            print("IN HERE")
                             input_timezone_obj = pytz.timezone(input_timezone)
                             date_obj = input_timezone_obj.localize(date_obj)
 
