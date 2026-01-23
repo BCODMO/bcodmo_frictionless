@@ -22,9 +22,22 @@ class HeaderNameInvalid(object):
 
             header_string = cell["header"]
 
+            if header_string.startswith("_"):
+                message = f'Column {cell["number"]} starts with an underscore.'
+                error = Error(
+                    "header-name-invalid",
+                    cell,
+                    message=message,
+                )
+                errors.append(error)
+
             if header_string[0].isdigit():
                 message = f'Column {cell["number"]} starts with a number'
-                error = Error("header-name-invalid", cell, message=message,)
+                error = Error(
+                    "header-name-invalid",
+                    cell,
+                    message=message,
+                )
                 errors.append(error)
                 """{
                     'code': 'header-name-invalid',
@@ -36,7 +49,11 @@ class HeaderNameInvalid(object):
 
             if not re.match("^[a-zA-Z0-9_]+$", header_string):
                 message = f'Column {cell["number"]} contains a character other than numbers, letters, and underscores.'
-                error = Error("header-name-invalid", cell, message=message,)
+                error = Error(
+                    "header-name-invalid",
+                    cell,
+                    message=message,
+                )
                 errors.append(error)
                 """{
                     'code': 'header-name-invalid',
