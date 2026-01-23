@@ -13,6 +13,7 @@ required = [
     "python-dateutil==2.8.2",
     "redis==6.2.0",
     "xlrd==1.2.0",
+    "pytz==2025.2",
 ]
 
 
