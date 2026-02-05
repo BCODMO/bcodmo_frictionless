@@ -440,6 +440,155 @@ Joins two resources together.
 
 ---
 
+## Standard Dataflows Processors
+
+These processors are from the standard [dataflows](https://github.com/datahq/dataflows) library.
+
+### **`duplicate`**
+
+Duplicates a resource within the package.
+
+**Parameters:**
+
+- `source` - name of the resource to duplicate (default: first resource)
+- `target-name` - name for the duplicated resource (default: `{source}_copy`)
+- `target-path` - path for the duplicated resource (default: `{target-name}.csv`)
+- `duplicate_to_end` - place duplicate at end of package instead of after source
+
+---
+
+### **`update_package`**
+
+Updates package-level metadata.
+
+**Parameters:**
+
+- Any key-value pairs to add/update in the package descriptor (except `resources`)
+
+---
+
+### **`update_resource`**
+
+Updates resource-level metadata.
+
+**Parameters:**
+
+- `resources` - list of resources to operate on
+- `metadata` - object of key-value pairs to add/update in the resource descriptor
+
+---
+
+### **`delete_fields`**
+
+Removes fields from resources.
+
+**Parameters:**
+
+- `resources` - list of resources to operate on
+- `fields` - list of field names to delete
+- `regex` - treat field names as regex patterns (default: `true`)
+
+---
+
+### **`sort`**
+
+Sorts rows by field values.
+
+**Parameters:**
+
+- `resources` - list of resources to operate on
+- `sort-by` - field name, format string (e.g., `{field1}{field2}`), or callable
+- `reverse` - sort in descending order (default: `false`)
+
+**Notes:**
+
+- Numeric fields are sorted numerically
+- Supports multi-field sorting via format strings
+
+---
+
+### **`add_computed_field`**
+
+Adds computed fields using predefined operations.
+
+**Parameters:**
+
+- `resources` - list of resources to operate on
+- `fields` - list of field definitions
+  - `target` - name of the new field (or object with `name` and `type`)
+  - `operation` - one of the operations below
+  - `source` - list of source field names (for most operations)
+  - `with` - additional parameter for some operations
+
+**Operations:**
+
+- `sum` - sum of source field values
+- `avg` - average of source field values
+- `max` - maximum of source field values
+- `min` - minimum of source field values
+- `multiply` - product of source field values
+- `constant` - constant value (specified in `with`)
+- `join` - join source values with separator (specified in `with`)
+- `format` - format string using row values (specified in `with`, e.g., `{field1}-{field2}`)
+
+---
+
+### **`unpivot`**
+
+Transforms columns into rows (wide to long format).
+
+**Parameters:**
+
+- `resources` - list of resources to operate on
+- `unpivot` - list of field specifications to unpivot
+  - `name` - field name or regex pattern
+  - `keys` - object mapping extra key field names to values (can use regex backreferences)
+- `extraKeyFields` - list of new key field definitions (with `name` and `type`)
+- `extraValueField` - definition for the value field (with `name` and `type`)
+- `regex` - treat field names as regex patterns (default: `true`)
+
+**Example:**
+
+```yaml
+unpivot:
+  - name: "value_\\d+"
+    keys:
+      year: "\\1"
+extraKeyFields:
+  - name: year
+    type: integer
+extraValueField:
+  name: value
+  type: number
+```
+
+---
+
+### **`join`**
+
+Joins two resources together (standard dataflows version).
+
+**Parameters:**
+
+- `source` - source resource configuration
+  - `name` - source resource name
+  - `key` - join key field(s) or key template
+  - `delete` - delete source after join (default: `true`)
+- `target` - target resource configuration
+  - `name` - target resource name
+  - `key` - join key field(s) or key template
+- `fields` - object mapping target field names to source field specs
+  - `name` - source field name
+  - `aggregate` - aggregation function: `sum`, `avg`, `median`, `max`, `min`, `first`, `last`, `count`, `any`, `set`, `array`, `counters`
+- `mode` - join mode: `inner`, `half-outer`, `full-outer` (default: `half-outer`)
+
+**Notes:**
+
+- Source resource must appear before target in the package
+- Use `*` in fields to include all source fields
+
+---
+
 ## Boolean Syntax
 
 Many processors support a `boolean_statement` parameter for conditional processing.
