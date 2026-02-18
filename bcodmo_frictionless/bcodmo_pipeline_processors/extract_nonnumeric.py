@@ -63,7 +63,16 @@ def extract_nonnumeric(fields, resources=None, suffix="_", boolean_statement=Non
                 # Get the old fields
                 package_fields = resource["schema"]["fields"]
                 package_field_names = [f["name"] for f in package_fields]
-                
+                package_field_names_set = set(package_field_names)
+
+                # Validate field names exist
+                for field in fields:
+                    if field not in package_field_names_set:
+                        raise Exception(
+                            f'Field "{field}" not found in resource "{resource["name"]}". '
+                            f'Available fields: {sorted(package_field_names_set)}'
+                        )
+
                 # Create field name -> field lookup dictionary for efficient access
                 package_fields_lookup = {f["name"]: f for f in package_fields}
                 

@@ -9,12 +9,19 @@ def set_types(parameters, resources=None, regex=None, types={}):
         for resource in package.pkg.descriptor["resources"]:
             if matcher.match(resource["name"]):
                 fields = resource["schema"]["fields"]
+                field_names = [f["name"] for f in fields]
                 for name, options in types.items():
                     if not regex:
-                        name = re.escape(name)
-                    name = re.compile(f"^{name}$")
+                        pattern = re.compile(f"^{re.escape(name)}$")
+                    else:
+                        pattern = re.compile(f"^{name}$")
+                    if not any(pattern.match(f) for f in field_names):
+                        raise Exception(
+                            f'Type pattern "{name}" did not match any fields in resource "{resource["name"]}". '
+                            f'Available fields: {sorted(field_names)}'
+                        )
                     for field in fields:
-                        if name.match(field["name"]):
+                        if pattern.match(field["name"]):
                             field.update(options)
 
         yield package.pkg

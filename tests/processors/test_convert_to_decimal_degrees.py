@@ -148,3 +148,24 @@ def test_convert_to_decimal_degrees_preserve_metadata_false():
     
     assert latitude_dd_field is not None
     assert "bcodmo:" not in latitude_dd_field.descriptor
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_convert_to_decimal_degrees_nonexistent_field():
+    flows = [
+        data_1,
+        convert_to_decimal_degrees(
+            {
+                "fields": [
+                    {
+                        "format": "degrees-decimal_minutes",
+                        "input_field": "nonexistent",
+                        "output_field": "latitude_dd",
+                        "pattern": "(?P<degrees>\\d+).\\s(?P<decimal_minutes>[\\d.]+).\\s(?P<directional>\\w)",
+                    }
+                ]
+            }
+        ),
+    ]
+    with pytest.raises(Exception, match="not found"):
+        Flow(*flows).results()

@@ -86,6 +86,13 @@ def round_fields(fields, resources=None, boolean_statement=None):
         for resource in package.pkg.descriptor["resources"]:
             if matcher.match(resource["name"]):
                 package_fields = resource["schema"]["fields"]
+                package_field_names = {f["name"] for f in package_fields}
+                for field in fields:
+                    if field["name"] not in package_field_names:
+                        raise Exception(
+                            f'Field "{field["name"]}" not found in resource "{resource["name"]}". '
+                            f'Available fields: {sorted(package_field_names)}'
+                        )
                 for field in fields:
                     if field.get("convert_to_integer", False) and field["digits"] == 0:
                         if field.get("digits") != 0:

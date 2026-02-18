@@ -69,6 +69,12 @@ def concatenate(
 ):
     def func(package):
         matcher = ResourceMatcher(resources, package.pkg)
+        resource_names = [res["name"] for res in package.pkg.descriptor["resources"]]
+        if not any(matcher.match(name) for name in resource_names):
+            raise Exception(
+                f'Source resource pattern {resources} did not match any resources in datapackage. '
+                f'Available resources: {resource_names}'
+            )
         # Prepare target resource
         if "name" not in target:
             target["name"] = "concat"

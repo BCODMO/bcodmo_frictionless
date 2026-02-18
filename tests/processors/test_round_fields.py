@@ -70,3 +70,13 @@ def test_preserve_trailing_zeros():
     rows, datapackage, _ = Flow(*flows).results()
     assert str(rows[0][3]["col1"]) == "310.600"
     assert str(rows[0][4]["col1"]) == "311.000"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_round_fields_nonexistent_field():
+    flows = [
+        data,
+        round_fields({"fields": [{"name": "nonexistent", "digits": 2}]}),
+    ]
+    with pytest.raises(Exception, match="not found"):
+        Flow(*flows).results()

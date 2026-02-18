@@ -102,7 +102,16 @@ def convert_units(fields, resources=None):
                     field_dict[field["name"]] = field
 
                 package_fields = resource["schema"]["fields"]
-                
+                package_field_names = {f["name"] for f in package_fields}
+
+                # Validate field names exist
+                for field in fields:
+                    if field["name"] not in package_field_names:
+                        raise Exception(
+                            f'Field "{field["name"]}" not found in resource "{resource["name"]}". '
+                            f'Available fields: {sorted(package_field_names)}'
+                        )
+
                 # Create field name -> field lookup dictionary for efficient access
                 package_fields_lookup = {f["name"]: f for f in package_fields}
                 

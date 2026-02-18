@@ -602,3 +602,25 @@ def test_utc_time_convert():
     assert datapackage.resources[0].name == "res"
     assert rows[0][0]["Time (HST)"] == "10:26"
     assert rows[0][0]["Time_UTC"] == datetime.time(20, 26)
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_convert_date_nonexistent_field():
+    flows = [
+        data_1,
+        convert_date(
+            {
+                "fields": [
+                    {
+                        "input_field": "nonexistent",
+                        "input_format": "%m/%d/%Y %H:%M:%S",
+                        "output_field": "date",
+                        "output_format": "%Y-%m-%d",
+                        "output_type": "date",
+                    }
+                ]
+            }
+        ),
+    ]
+    with pytest.raises(Exception, match="not found"):
+        Flow(*flows).results()

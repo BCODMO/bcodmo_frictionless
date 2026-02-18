@@ -30,10 +30,16 @@ def rename_fields(fields, resources=None):
         matcher = ResourceMatcher(resources, package.pkg)
         for resource in package.pkg.descriptor["resources"]:
             if matcher.match(resource["name"]):
+                package_fields = resource["schema"]["fields"]
+                package_field_names = {f["name"] for f in package_fields}
                 for field in fields:
                     old_field_name = field["old_field"]
                     new_field_name = field["new_field"]
-                    package_fields = resource["schema"]["fields"]
+                    if old_field_name not in package_field_names:
+                        raise Exception(
+                            f'Field "{old_field_name}" not found in resource "{resource["name"]}". '
+                            f'Available fields: {sorted(package_field_names)}'
+                        )
                     for package_field in package_fields:
                         if package_field["name"] == old_field_name:
                             package_field["name"] = new_field_name

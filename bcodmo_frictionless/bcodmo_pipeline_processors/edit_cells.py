@@ -46,6 +46,17 @@ def process_resource(rows, edited, missing_values):
 def edit_cells(edited, resources=None):
     def func(package):
         matcher = ResourceMatcher(resources, package.pkg)
+        for resource in package.pkg.descriptor["resources"]:
+            if matcher.match(resource["name"]):
+                package_field_names = {f["name"] for f in resource["schema"]["fields"]}
+                for row_num, cells in edited.items():
+                    for cell in cells:
+                        field = cell.get("field")
+                        if field and field not in package_field_names:
+                            raise Exception(
+                                f'Field "{field}" not found in resource "{resource["name"]}". '
+                                f'Available fields: {sorted(package_field_names)}'
+                            )
         yield package.pkg
         for rows in package:
             if matcher.match(rows.res.name):

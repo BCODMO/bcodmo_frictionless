@@ -28,3 +28,18 @@ def test_rename_fields_regex():
     f = datapackage.resources[0].schema.fields
     assert f[0].name == "test1"
     assert f[1].name == "test2"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_rename_fields_regex_nonexistent_field():
+    flows = [
+        data,
+        rename_fields_regex(
+            {
+                "fields": ["nonexistent"],
+                "pattern": {"find": "col(\\d)", "replace": "test\\1"},
+            }
+        ),
+    ]
+    with pytest.raises(Exception, match="not found"):
+        Flow(*flows).results()

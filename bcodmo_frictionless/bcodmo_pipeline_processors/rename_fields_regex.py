@@ -39,13 +39,19 @@ def rename_fields_regex(fields, pattern, resources=None):
         matcher = ResourceMatcher(resources, package.pkg)
         for resource in package.pkg.descriptor["resources"]:
             if matcher.match(resource["name"]):
+                package_fields = resource["schema"]["fields"]
+                package_field_names = {f["name"] for f in package_fields}
                 for field in fields:
+                    if field not in package_field_names:
+                        raise Exception(
+                            f'Field "{field}" not found in resource "{resource["name"]}". '
+                            f'Available fields: {sorted(package_field_names)}'
+                        )
                     new_field_name = re.sub(
                         str(pattern["find"]),
                         str(pattern["replace"]),
                         str(field),
                     )
-                    package_fields = resource["schema"]["fields"]
                     for package_field in package_fields:
                         if package_field["name"] == field:
                             package_field["name"] = new_field_name

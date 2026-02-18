@@ -9,19 +9,21 @@ from bcodmo_frictionless.bcodmo_pipeline_processors import *
 TEST_DEV = os.environ.get("TEST_DEV", False) == "true"
 
 data = [
-    {"hello": "world"},
+    {"col1": "hello", "col2": "world"},
 ]
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
-def test_remove_resources():
-    flows = [data, remove_resources({"resources": ["res_1"]})]
-    rows, datapackage, _ = Flow(*flows).results()
-    assert len(datapackage.resources) == 0
-
-
-@pytest.mark.skipif(TEST_DEV, reason="test development")
-def test_remove_resources_nonexistent():
-    flows = [data, remove_resources({"resources": ["nonexistent"]})]
+def test_concatenate_nonexistent_resource():
+    flows = [
+        data,
+        concatenate(
+            {
+                "sources": ["nonexistent"],
+                "fields": {"col1": []},
+                "target": {"name": "output"},
+            }
+        ),
+    ]
     with pytest.raises(Exception, match="did not match any resources"):
         Flow(*flows).results()

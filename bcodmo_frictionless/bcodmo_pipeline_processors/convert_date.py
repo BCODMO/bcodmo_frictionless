@@ -308,6 +308,25 @@ def convert_date(fields, resources=None, boolean_statement=None):
         for resource in package.pkg.descriptor["resources"]:
             if matcher.match(resource["name"]):
                 package_fields = resource["schema"]["fields"]
+                package_field_names = {f["name"] for f in package_fields}
+
+                # Validate input fields exist
+                for field_config in fields:
+                    if "inputs" in field_config:
+                        for input_d in field_config["inputs"]:
+                            input_field = input_d["field"]
+                            if input_field not in package_field_names:
+                                raise Exception(
+                                    f'Field "{input_field}" not found in resource "{resource["name"]}". '
+                                    f'Available fields: {sorted(package_field_names)}'
+                                )
+                    elif "input_field" in field_config:
+                        input_field = field_config["input_field"]
+                        if input_field not in package_field_names:
+                            raise Exception(
+                                f'Field "{input_field}" not found in resource "{resource["name"]}". '
+                                f'Available fields: {sorted(package_field_names)}'
+                            )
 
                 # Create field name -> field lookup dictionary for efficient access
                 package_fields_lookup = {f["name"]: f for f in package_fields}

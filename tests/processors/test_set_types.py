@@ -64,3 +64,16 @@ def test_set_types():
     assert (
         datapackage.descriptor["resources"][0]["schema"]["fields"][3]["type"] == "date"
     )
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_set_types_nonexistent_field():
+    data = [
+        {"col1": "hello", "col2": "world"},
+    ]
+    flows = [
+        data,
+        set_types({"types": {"nonexistent": {"type": "number"}}}),
+    ]
+    with pytest.raises(Exception, match="did not match any fields"):
+        Flow(*flows).results()

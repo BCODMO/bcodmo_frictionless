@@ -127,3 +127,13 @@ def test_edit_cells_unused():
         assert False == True
     except:
         pass
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_edit_cells_nonexistent_field():
+    flows = [
+        data,
+        edit_cells({"edited": {1: [{"field": "nonexistent", "value": "hello"}]}}),
+    ]
+    with pytest.raises(Exception, match="not found"):
+        Flow(*flows).results()

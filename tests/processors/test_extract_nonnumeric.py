@@ -104,3 +104,13 @@ def test_extract_nonnumeric_preserve_metadata_false():
     
     assert comment_field is not None
     assert "bcodmo:" not in comment_field.descriptor
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_extract_nonnumeric_nonexistent_field():
+    flows = [
+        data,
+        extract_nonnumeric({"fields": ["nonexistent"]}),
+    ]
+    with pytest.raises(Exception, match="not found"):
+        Flow(*flows).results()

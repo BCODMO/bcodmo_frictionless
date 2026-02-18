@@ -19,6 +19,12 @@ def rename_resource(old_resource, new_resource, cache_id=None):
                 "Both old_resource and new_resource are required parameters in rename_resource"
             )
         matcher = ResourceMatcher([old_resource], package.pkg)
+        resource_names = [res["name"] for res in package.pkg.descriptor["resources"]]
+        if not any(matcher.match(name) for name in resource_names):
+            raise Exception(
+                f'Resource "{old_resource}" not found in datapackage. '
+                f'Available resources: {resource_names}'
+            )
         for res in package.pkg.descriptor["resources"]:
             if matcher.match(res["name"]):
                 old_name = res["name"]

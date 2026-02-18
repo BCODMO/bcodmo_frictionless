@@ -200,3 +200,23 @@ def test_split_column_preserve_metadata_false():
     
     assert f2_field is not None
     assert "bcodmo:" not in f2_field.descriptor
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_split_column_nonexistent_field():
+    flows = [
+        data,
+        split_column(
+            {
+                "fields": [
+                    {
+                        "input_field": "nonexistent",
+                        "pattern": "(.*) (.*)",
+                        "output_fields": ["f1", "f2"],
+                    }
+                ]
+            }
+        ),
+    ]
+    with pytest.raises(Exception, match="not found"):
+        Flow(*flows).results()

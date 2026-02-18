@@ -99,7 +99,17 @@ def split_column(fields, delete_input=False, resources=None, boolean_statement=N
             if matcher.match(resource["name"]):
                 # Get the old fields
                 package_fields = resource["schema"]["fields"]
-                
+                package_field_names = {f["name"] for f in package_fields}
+
+                # Validate input fields exist
+                for field in fields:
+                    input_field = field.get("input_field")
+                    if input_field and input_field not in package_field_names:
+                        raise Exception(
+                            f'Field "{input_field}" not found in resource "{resource["name"]}". '
+                            f'Available fields: {sorted(package_field_names)}'
+                        )
+
                 # Create field name -> field lookup dictionary for efficient access
                 package_fields_lookup = {f["name"]: f for f in package_fields}
 

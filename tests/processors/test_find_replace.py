@@ -79,10 +79,8 @@ def test_find_replace_none():
             }
         ),
     ]
-    rows, datapackage, _ = Flow(*flows).results()
-    assert rows[0][0]["col1"] == "abc"
-    assert rows[0][1]["col1"] == "heresabc"
-    assert rows[0][2]["col1"] == "nothere"
+    with pytest.raises(Exception, match="not found"):
+        Flow(*flows).results()
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")

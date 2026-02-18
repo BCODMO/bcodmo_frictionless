@@ -83,6 +83,16 @@ def string_format(fields, resources=None, boolean_statement=None):
             if matcher.match(resource["name"]):
                 # Get the old fields
                 package_fields = resource["schema"]["fields"]
+                package_field_names = {f["name"] for f in package_fields}
+
+                # Validate input fields exist
+                for field_config in fields:
+                    for input_field in field_config.get("input_fields", []):
+                        if input_field not in package_field_names:
+                            raise Exception(
+                                f'Field "{input_field}" not found in resource "{resource["name"]}". '
+                                f'Available fields: {sorted(package_field_names)}'
+                            )
 
                 # Create a list of names and a lookup dict for the new fields
                 new_field_names = [f["output_field"] for f in fields]

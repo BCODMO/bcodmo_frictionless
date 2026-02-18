@@ -308,3 +308,22 @@ def test_convert_units_preserve_metadata_multiple_conversions():
     assert "bcodmo:" in distance_km_field.descriptor
     assert distance_km_field.descriptor["bcodmo:"]["units"] == "miles"
     assert distance_km_field.descriptor["bcodmo:"]["description"] == "Distance traveled in miles"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_convert_units_nonexistent_field():
+    flows = [
+        data,
+        convert_units(
+            {
+                "fields": [
+                    {
+                        "name": "nonexistent",
+                        "conversion": "feet_to_meter",
+                    }
+                ]
+            }
+        ),
+    ]
+    with pytest.raises(Exception, match="not found"):
+        Flow(*flows).results()

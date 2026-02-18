@@ -100,6 +100,16 @@ def _find_replace(rows, fields, missing_values, boolean_statement=None):
 def find_replace(fields, resources=None, boolean_statement=None):
     def func(package):
         matcher = ResourceMatcher(resources, package.pkg)
+        for resource in package.pkg.descriptor["resources"]:
+            if matcher.match(resource["name"]):
+                package_field_names = {f["name"] for f in resource["schema"]["fields"]}
+                for field in fields:
+                    name = field.get("name", None)
+                    if name is not None and name not in package_field_names:
+                        raise Exception(
+                            f'Field "{name}" not found in resource "{resource["name"]}". '
+                            f'Available fields: {sorted(package_field_names)}'
+                        )
         yield package.pkg
         for rows in package:
             if matcher.match(rows.res.name):
