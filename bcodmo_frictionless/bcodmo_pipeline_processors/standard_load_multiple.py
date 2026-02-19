@@ -62,9 +62,12 @@ class standard_load_multiple(standard_load):
         results = {}
 
         # Only do preloaded data for bcodmo-aws loader
+        # Skip preloading when limit_rows is active so that _limit_rows can be
+        # applied at the Stream level, avoiding downloading entire files
         if (
             self.options.get("scheme", None) == "bcodmo-aws"
             and len(self.load_sources) > 1
+            and not (self.limit_rows_loader and self.limit_rows is not None)
         ):
             procs = {}
             pool = Pool(threads=True)

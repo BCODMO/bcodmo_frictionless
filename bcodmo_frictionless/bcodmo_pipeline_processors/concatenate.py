@@ -72,8 +72,8 @@ def concatenate(
         resource_names = [res["name"] for res in package.pkg.descriptor["resources"]]
         if not any(matcher.match(name) for name in resource_names):
             raise Exception(
-                f'Source resource pattern {resources} did not match any resources in datapackage. '
-                f'Available resources: {resource_names}'
+                f"Source resource pattern {resources} did not match any resources in datapackage. "
+                f"Available resources: {resource_names}"
             )
         # Prepare target resource
         if "name" not in target:
@@ -81,7 +81,8 @@ def concatenate(
         if not target["name"]:
             raise Exception("The concatenate target name cannot be empty")
         if "path" not in target:
-            target["path"] = "data/" + target["name"] + ".csv"
+            # target["path"] = "data/" + target["name"] + ".csv"
+            target["path"] = target["name"] + ".csv"
         target.update(
             dict(
                 mediatype="text/csv",
@@ -91,8 +92,12 @@ def concatenate(
 
         # Create mapping between source field names to target field names
         field_mapping = {}
+        empty_array_fields = set()
+        explicit_source_fields = set()
         for target_field, source_fields in fields.items():
             if source_fields is not None:
+                if len(source_fields) == 0:
+                    empty_array_fields.add(target_field)
                 for source_field in source_fields:
                     if source_field in field_mapping:
                         raise RuntimeError(
@@ -100,6 +105,7 @@ def concatenate(
                             % (source_field, field_mapping)
                         )
                     field_mapping[source_field] = target_field
+                    explicit_source_fields.add(source_field)
 
             if target_field in field_mapping:
                 raise RuntimeError("Duplicate appearance of %s" % target_field)
@@ -113,6 +119,7 @@ def concatenate(
                 raise Exception(
                     f"source_field_name \"{source['column_name']}\" field name already exists"
                 )
+        available_source_fields = set()
         for resource in package.pkg.descriptor["resources"]:
             if not matcher.match(resource["name"]):
                 continue
@@ -121,6 +128,7 @@ def concatenate(
             pk = schema.get("primaryKey", [])
             for field in schema.get("fields", []):
                 orig_name = field["name"]
+                available_source_fields.add(orig_name)
                 if orig_name in field_mapping:
                     name = field_mapping[orig_name]
                     if name not in needed_fields:
@@ -133,6 +141,21 @@ def concatenate(
             target["schema"]["missingValues"] = missing_values
         if len(target["schema"]["primaryKey"]) == 0:
             del target["schema"]["primaryKey"]
+
+        unmatched_empty = empty_array_fields & set(needed_fields)
+        if unmatched_empty:
+            raise Exception(
+                f"The following fields were passed with an empty array but do not match "
+                f"any fields in the source data: {sorted(unmatched_empty)}"
+            )
+
+        unmatched_explicit = explicit_source_fields - available_source_fields
+        if unmatched_explicit:
+            raise Exception(
+                f"The following source fields were explicitly listed but do not exist "
+                f"in any of the source resources: {sorted(unmatched_explicit)}. "
+                f"Available source fields: {sorted(available_source_fields)}"
+            )
 
         for name in needed_fields:
             target["schema"]["fields"].append(dict(name=name, type="string"))
