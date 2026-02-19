@@ -60,3 +60,56 @@ def test_concatenate_missing_filenames():
 
     assert rows[0][0]["source_file"] == "test.csv"
     assert rows[0][-1]["source_file"] == "test.csv"
+
+
+validation_data = [
+    {"col1": "hello", "col2": "world"},
+]
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_concatenate_nonexistent_resource():
+    flows = [
+        validation_data,
+        concatenate(
+            {
+                "sources": ["nonexistent"],
+                "fields": {"col1": []},
+                "target": {"name": "output"},
+            }
+        ),
+    ]
+    with pytest.raises(Exception, match="did not match any resources"):
+        Flow(*flows).results()
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_concatenate_empty_array_no_matching_field():
+    flows = [
+        validation_data,
+        concatenate(
+            {
+                "sources": None,
+                "fields": {"col1": [], "nonexistent_col": []},
+                "target": {"name": "output"},
+            }
+        ),
+    ]
+    with pytest.raises(Exception, match="do not match any fields in the source data"):
+        Flow(*flows).results()
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_concatenate_explicit_source_field_not_in_resource():
+    flows = [
+        validation_data,
+        concatenate(
+            {
+                "sources": None,
+                "fields": {"col1": [], "target_col": ["nonexistent_source"]},
+                "target": {"name": "output"},
+            }
+        ),
+    ]
+    with pytest.raises(Exception, match="do not exist in any of the source resources"):
+        Flow(*flows).results()
