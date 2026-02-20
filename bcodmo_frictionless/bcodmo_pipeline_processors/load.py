@@ -322,6 +322,7 @@ def load(_from, parameters):
                         sheets.append(sheet_name)
             else:
                 sheets_separate = sheet.split(sheet_separator)
+                print("SHEETS SEPERATE", sheets_separate)
                 for s in sheets_separate:
                     if re.match(r"\d-\d", s):
                         try:
@@ -343,6 +344,7 @@ def load(_from, parameters):
                     f"No sheets found for {url} with the inputted parameters"
                 )
 
+            print("SHEETS", sheets)
             # Create load processors for all of these sheets
             for sheet_name in sheets:
                 new_name = clean_resource_name(str(sheet_name))
@@ -379,6 +381,9 @@ def load(_from, parameters):
 
     # Default all infer and cast strategy to string to handle an update from dataflows that deprecates old pipelines
     # https://bco-dmo-group.slack.com/archives/CSQ582V4Y/p1712063770616059
+    print(load_sources)
+    print(resource_names)
+    print(all_sheet_names)
     parameters["infer_strategy"] = "strings"
     parameters["cast_strategy"] = "strings"
     params.extend(

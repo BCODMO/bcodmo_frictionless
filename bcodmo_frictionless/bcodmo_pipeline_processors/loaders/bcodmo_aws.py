@@ -78,6 +78,7 @@ class BcodmoAWS(Loader):
                 bytes = io.BufferedRandom(io.BytesIO())
                 contents = response["Body"].read()
                 bytes.write(contents)
+                bytes.seek(0)
 
             else:
                 bytes = BufferedS3ByteStream(self.__s3_endpoint_url, parts.netloc, parts.path[1:])#object)

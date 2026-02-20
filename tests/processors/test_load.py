@@ -390,6 +390,36 @@ def test_load_s3_path_xlsx_regex():
     assert rows[3][1]["col6"] == "2"
 
 
+@mock_aws
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_s3_path_xlsx_regex_cache_id():
+    # create bucket and put objects
+    conn = boto3.client("s3")
+    conn.create_bucket(Bucket="testing_bucket")
+    # add the file
+    conn.upload_file("data/test.xlsx", "testing_bucket", "test.xlsx")
+
+    flows = [
+        load(
+            {
+                "from": "s3://testing_bucket/test.xlsx",
+                "name": "res",
+                "format": "xlsx",
+                "sheet": r"test\d",
+                "sheet_regex": True,
+                "cache_id": "123",
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert len(datapackage.resources) == 4
+    assert datapackage.resources[0].name == "test2"
+    assert rows[0][0]["col5"] == "abc"
+    assert rows[1][0]["col2"] == "1"
+    assert rows[2][2]["col7"] == "53.1"
+    assert rows[3][1]["col6"] == "2"
+
+
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_load_list():
     flows = [
