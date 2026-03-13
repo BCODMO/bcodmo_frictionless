@@ -36,7 +36,7 @@ class dump_to_path(FileDumper):
         temp_name = os.path.join(path_part, "temp")
         shutil.copy(filename, temp_name)
         # Remove carraige endings by saving as new file with \n
-        with open(temp_name, "r", encoding="utf-8") as inf, open(path, "w+", newline="\n", encoding="utf-8") as outf:
+        with open(temp_name, "r") as inf, open(path, "w+", newline="\n") as outf:
             outf.writelines(inf)
         os.remove(temp_name)
         # Change file and folder permissions to 775

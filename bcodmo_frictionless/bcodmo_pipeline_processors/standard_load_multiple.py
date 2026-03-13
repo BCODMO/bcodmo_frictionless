@@ -190,10 +190,10 @@ class standard_load_multiple(standard_load):
                     and self.options.get("format") != "xlsx"
                     and self.options.get("format") != "xls"
                 ):
-                    # This doesn't actually limit in the stream, but rather later in the loader.
                     options["_limit_rows"] = self.limit_rows
                 stream: Stream = Stream(self.load_source, **options).open()
                 """ Finish change to add preloaded data """
+
 
                 if len(stream.headers) != len(set(stream.headers)):
                     if not self.deduplicate_headers:
