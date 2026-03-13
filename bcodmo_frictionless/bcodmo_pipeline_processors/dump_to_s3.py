@@ -298,7 +298,7 @@ class S3Dumper(DumperBase):
                         writer.writerow([lat, lon])
                     csv_string = output.getvalue()
                     output.close()
-                    csv_bytes = csv_string.encode()
+                    csv_bytes = csv_string.encode("utf-8")
                     size = len(csv_bytes)
                     name = f"{resource_name}.unique_lat_lon"
                     filesizes[name] = size
@@ -342,7 +342,7 @@ class S3Dumper(DumperBase):
             # self from pipeline_spec inputted
             try:
                 # Write the pipeline_spec to the temp file
-                contents = self.pipeline_spec.encode()
+                contents = self.pipeline_spec.encode("utf-8")
                 size = len(contents)
                 _, _, etag = self.write_file_to_output(
                     contents, "pipeline-spec.yaml", "text/yaml"
@@ -409,7 +409,7 @@ class S3Dumper(DumperBase):
             sort_keys=True,
             ensure_ascii=False,
         )
-        contents = str_contents.encode()
+        contents = str_contents.encode("utf-8")
 
         DumperBase.inc_attr(
             self.datapackage.descriptor, self.datapackage_bytes, len(contents)
@@ -540,7 +540,7 @@ class S3Dumper(DumperBase):
         part_number += 1
         stream.seek(0)
         s = stream.read()
-        contents = s.encode()
+        contents = s.encode("utf-8")
         contents_size = len(contents)
 
         if contents_size:
