@@ -14,6 +14,7 @@ required = [
     "redis==6.2.0",
     "xlrd==1.2.0",
     "pytz==2025.2",
+    "billiard==4.2.1",
 ]
 
 

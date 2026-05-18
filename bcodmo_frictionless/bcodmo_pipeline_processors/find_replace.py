@@ -98,6 +98,17 @@ def _find_replace(rows, fields, missing_values, boolean_statement=None):
 
 
 def find_replace(fields, resources=None, boolean_statement=None):
+    if len(fields) > 1:
+        reference_patterns = fields[0].get("patterns", [])
+        reference_name = fields[0].get("name", None)
+        for field in fields[1:]:
+            if field.get("patterns", []) != reference_patterns:
+                raise Exception(
+                    f'All fields in find_replace must have the same patterns. '
+                    f'Patterns for field "{field.get("name", None)}" do not match '
+                    f'patterns for field "{reference_name}".'
+                )
+
     def func(package):
         matcher = ResourceMatcher(resources, package.pkg)
         for resource in package.pkg.descriptor["resources"]:

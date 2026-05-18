@@ -84,6 +84,29 @@ def test_find_replace_none():
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_find_replace_mismatched_patterns():
+    with pytest.raises(Exception, match="same patterns"):
+        flows = [
+            [{"col1": "abc", "col2": "abc"}],
+            find_replace(
+                {
+                    "fields": [
+                        {
+                            "name": "col1",
+                            "patterns": [{"find": "abc", "replace": "test"}],
+                        },
+                        {
+                            "name": "col2",
+                            "patterns": [{"find": "abc", "replace": "different"}],
+                        },
+                    ]
+                }
+            ),
+        ]
+        Flow(*flows).results()
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_find_replace_missing_value():
     flows = [
         load(
