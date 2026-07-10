@@ -67,6 +67,51 @@ def test_set_types():
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_set_types_derives_output_format():
+    # A temporal type set with a `format` (and no outputFormat parameter)
+    # should get outputFormat derived from format so the output matches the
+    # input format.
+    data = [
+        {"dt": "2020-01-01 12:30:00"},
+    ]
+    flows = [
+        data,
+        set_types(
+            {"types": {"dt": {"type": "datetime", "format": "%Y-%m-%d %H:%M:%S"}}}
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    field = datapackage.descriptor["resources"][0]["schema"]["fields"][0]
+    assert field["format"] == "%Y-%m-%d %H:%M:%S"
+    assert field["outputFormat"] == "%Y-%m-%d %H:%M:%S"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_set_types_respects_explicit_output_format():
+    # An explicitly-passed outputFormat is not overwritten.
+    data = [
+        {"dt": "2020-01-01 12:30:00"},
+    ]
+    flows = [
+        data,
+        set_types(
+            {
+                "types": {
+                    "dt": {
+                        "type": "datetime",
+                        "format": "%Y-%m-%d %H:%M:%S",
+                        "outputFormat": "%Y-%m-%dT%H:%M:%SZ",
+                    }
+                }
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    field = datapackage.descriptor["resources"][0]["schema"]["fields"][0]
+    assert field["outputFormat"] == "%Y-%m-%dT%H:%M:%SZ"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_set_types_nonexistent_field():
     data = [
         {"col1": "hello", "col2": "world"},

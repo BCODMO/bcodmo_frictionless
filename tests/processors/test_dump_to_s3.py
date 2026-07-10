@@ -247,6 +247,65 @@ data_1 = [
 ]
 
 
+temporal_data = [
+    {"dt": "2020-01-01 12:30:00"},
+    {"dt": "2021-06-15 08:05:59"},
+]
+
+
+@mock_aws
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_dump_temporal_output_matches_input_format():
+    # A datetime field typed via set_types (with only a `format`, no
+    # `outputFormat`) should be written back out in its input format rather
+    # than being coerced to the ISO default. The output datapackage should
+    # record outputFormat == format == the input format.
+    server = ThreadedMotoServer()
+    server.start()
+    os.environ["LAMINAR_S3_HOST"] = "http://localhost:5000"
+
+    conn = boto3.client("s3", endpoint_url="http://localhost:5000")
+    conn.create_bucket(Bucket="testing_dump_bucket")
+    flows = [
+        temporal_data,
+        set_types(
+            {
+                "types": {
+                    "dt": {
+                        "type": "datetime",
+                        "format": "%Y-%m-%d %H:%M:%S",
+                    },
+                }
+            }
+        ),
+        dump_to_s3(
+            {
+                "prefix": "test",
+                "force-format": True,
+                "format": "csv",
+                "save_pipeline_spec": True,
+                "temporal_format_property": "outputFormat",
+                "bucket_name": "testing_dump_bucket",
+                "data_manager": "test",
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    body = (
+        conn.get_object(Bucket="testing_dump_bucket", Key="test/res_1.csv")["Body"]
+        .read()
+        .decode("utf-8")
+    )
+
+    # The written values keep the input format (space separator, no "T").
+    assert body == "dt\n2020-01-01 12:30:00\n2021-06-15 08:05:59\n"
+
+    field = datapackage.resources[0].descriptor["schema"]["fields"][0]
+    assert field["format"] == "%Y-%m-%d %H:%M:%S"
+    assert field["outputFormat"] == "%Y-%m-%d %H:%M:%S"
+    server.stop()
+
+
 @mock_aws
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_dump_scientific_notation_negative():
