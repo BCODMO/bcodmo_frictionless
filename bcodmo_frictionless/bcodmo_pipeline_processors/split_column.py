@@ -10,16 +10,19 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.boolean_processor_helper imp
     check_line,
 )
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import get_missing_values
+from bcodmo_frictionless.bcodmo_pipeline_processors.timing import StepTimer
 
 
 def process_resource(
-    rows, fields, missing_values, delete_input=False, boolean_statement=None
+    rows, fields, missing_values, delete_input=False, boolean_statement=None, timer=None
 ):
     expression = get_expression(boolean_statement)
 
     row_counter = 0
     for row in rows:
         row_counter += 1
+        if timer is not None:
+            timer.bump("split_rows")
 
         line_passed = check_line(expression, row_counter, row, missing_values)
         try:
@@ -163,12 +166,16 @@ def split_column(fields, delete_input=False, resources=None, boolean_statement=N
         for rows in package:
             if matcher.match(rows.res.name):
                 missing_values = get_missing_values(rows.res)
-                yield process_resource(
-                    rows,
-                    fields,
-                    missing_values,
-                    delete_input=delete_input,
-                    boolean_statement=boolean_statement,
+                timer = StepTimer("split_column", rows.res.name)
+                yield timer.wrap(
+                    process_resource(
+                        timer.rows(rows),
+                        fields,
+                        missing_values,
+                        delete_input=delete_input,
+                        boolean_statement=boolean_statement,
+                        timer=timer,
+                    )
                 )
             else:
                 yield rows

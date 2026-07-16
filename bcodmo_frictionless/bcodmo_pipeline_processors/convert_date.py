@@ -16,6 +16,7 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.boolean_processor_helper imp
     check_line,
 )
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import get_missing_values
+from bcodmo_frictionless.bcodmo_pipeline_processors.timing import StepTimer
 
 
 EXCEL_START_DATE = datetime(1899, 12, 30)
@@ -26,13 +27,17 @@ def is_leap(year):
 
 
 def process_resource(
-    rows, fields, missing_values, datapackage_fields, boolean_statement=None
+    rows, fields, missing_values, datapackage_fields, boolean_statement=None, timer=None
 ):
     expression = get_expression(boolean_statement)
     row_counter = 0
     for row in rows:
         row_counter += 1
         new_row = dict((k, v) for k, v in row.items())
+        if timer is not None:
+            # Count rows that actually go through date construction (one per
+            # matched row); pair with work= to see per-parse cost.
+            timer.bump("date_rows")
 
         line_passed = check_line(expression, row_counter, new_row, missing_values)
         try:
@@ -394,12 +399,16 @@ def convert_date(fields, resources=None, boolean_statement=None):
         for rows in package:
             if matcher.match(rows.res.name):
                 missing_values = get_missing_values(rows.res)
-                yield process_resource(
-                    rows,
-                    fields,
-                    missing_values,
-                    rows.res.schema.fields,
-                    boolean_statement=boolean_statement,
+                timer = StepTimer("convert_date", rows.res.name)
+                yield timer.wrap(
+                    process_resource(
+                        timer.rows(rows),
+                        fields,
+                        missing_values,
+                        rows.res.schema.fields,
+                        boolean_statement=boolean_statement,
+                        timer=timer,
+                    )
                 )
             else:
                 yield rows

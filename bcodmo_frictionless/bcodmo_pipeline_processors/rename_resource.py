@@ -11,6 +11,8 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
 
 from dataflows.helpers.resource_matcher import ResourceMatcher
 
+from bcodmo_frictionless.bcodmo_pipeline_processors.timing import StepTimer
+
 
 def rename_resource(old_resource, new_resource, cache_id=None):
     def func(package):
@@ -49,7 +51,11 @@ def rename_resource(old_resource, new_resource, cache_id=None):
             if matcher.match(rows.res.name):
                 rows.res.descriptor["name"] = new_resource
                 rows.res.commit()
-            yield rows
+                # Pure rename; rows pass through untouched (work= ~0).
+                timer = StepTimer("rename_resource", new_resource)
+                yield timer.wrap(timer.rows(rows))
+            else:
+                yield rows
 
     return func
 

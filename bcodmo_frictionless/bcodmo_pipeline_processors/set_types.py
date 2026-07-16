@@ -2,6 +2,8 @@ from dataflows import Flow, PackageWrapper, schema_validator
 from dataflows.helpers.resource_matcher import ResourceMatcher
 import re
 
+from bcodmo_frictionless.bcodmo_pipeline_processors.timing import StepTimer
+
 
 def set_types(parameters, resources=None, regex=None, types={}):
     def func(package: PackageWrapper):
@@ -38,7 +40,10 @@ def set_types(parameters, resources=None, regex=None, types={}):
         yield package.pkg
         for rows in package:
             if matcher.match(rows.res.name):
-                yield schema_validator(rows.res, rows)
+                # schema_validator performs the actual type casting
+                # (string -> number/integer/datetime); work= is that cost.
+                timer = StepTimer("set_types(bcodmo)", rows.res.name)
+                yield timer.wrap(schema_validator(rows.res, timer.rows(rows)))
             else:
                 yield rows
         yield from package

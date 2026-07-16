@@ -3,6 +3,8 @@ import logging
 
 from dataflows import Flow
 
+from bcodmo_frictionless.bcodmo_pipeline_processors.timing import StepTimer
+
 
 def reorder_fields(fields, resources=None):
     def func(package):
@@ -28,7 +30,15 @@ def reorder_fields(fields, resources=None):
                     )
                 resource["schema"]["fields"] = new_fields_list
         yield package.pkg
-        yield from package
+        # reorder_fields only reshuffles the schema field order; the row dicts
+        # pass through untouched, so work= should be ~0. It is timed anyway so
+        # every step in the pipeline reports a line.
+        for rows in package:
+            if matcher.match(rows.res.name):
+                timer = StepTimer("reorder_fields", rows.res.name)
+                yield timer.wrap(timer.rows(rows))
+            else:
+                yield rows
 
     return func
 

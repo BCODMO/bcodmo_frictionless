@@ -3,6 +3,8 @@ from dataflows.helpers.resource_matcher import ResourceMatcher
 from dataflows import Flow
 import logging
 
+from bcodmo_frictionless.bcodmo_pipeline_processors.timing import StepTimer
+
 
 def process_resource(rows, fields):
     row_counter = 0
@@ -47,10 +49,8 @@ def rename_fields(fields, resources=None):
         yield package.pkg
         for rows in package:
             if matcher.match(rows.res.name):
-                yield process_resource(
-                    rows,
-                    fields,
-                )
+                timer = StepTimer("rename_fields", rows.res.name)
+                yield timer.wrap(process_resource(timer.rows(rows), fields))
             else:
                 yield rows
 

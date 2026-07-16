@@ -37,6 +37,8 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.loaders import (
     BcodmoAWS,
 )
 
+from bcodmo_frictionless.bcodmo_pipeline_processors.timing import StepTimer
+
 
 # Add custom parsers here
 # Custom parsers should NOT have periods in their name
@@ -170,7 +172,14 @@ def load(_from, parameters):
                         [],
                     )
 
-                    yield process_resource(r, missing_data_values)
+                    # This is the outermost row-producing stage of load, so its
+                    # pull= captures the time the CSV/regex parser (and S3
+                    # streaming) spends producing rows, and rows_in vs rows_out
+                    # shows how many empty rows were dropped.
+                    timer = StepTimer("load", r.res.name)
+                    yield timer.wrap(
+                        process_resource(timer.rows(r), missing_data_values)
+                    )
                 else:
                     yield r
 

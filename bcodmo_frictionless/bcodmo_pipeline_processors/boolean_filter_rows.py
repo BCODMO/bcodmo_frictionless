@@ -14,6 +14,7 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.boolean_processor_helper imp
 )
 
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import get_missing_values
+from bcodmo_frictionless.bcodmo_pipeline_processors.timing import StepTimer
 
 
 def _boolean_filter_rows(rows, missing_values, boolean_statement):
@@ -34,7 +35,14 @@ def boolean_filter_rows(resources=None, boolean_statement=None):
         for rows in package:
             if matcher.match(rows.res.name):
                 missing_values = get_missing_values(rows.res)
-                yield _boolean_filter_rows(rows, missing_values, boolean_statement)
+                # rows_in vs rows_out on the summary line shows how many rows
+                # this filter dropped.
+                timer = StepTimer("boolean_filter_rows", rows.res.name)
+                yield timer.wrap(
+                    _boolean_filter_rows(
+                        timer.rows(rows), missing_values, boolean_statement
+                    )
+                )
 
             else:
                 yield rows

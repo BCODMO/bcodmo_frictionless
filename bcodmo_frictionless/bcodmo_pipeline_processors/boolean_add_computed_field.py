@@ -18,9 +18,10 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.boolean_processor_helper imp
     parse_math,
 )
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import get_missing_values
+from bcodmo_frictionless.bcodmo_pipeline_processors.timing import StepTimer
 
 
-def process_resource(rows, fields, missing_values):
+def process_resource(rows, fields, missing_values, timer=None):
     field_functions = []
     value_functions = []
     for index in range(len(fields)):
@@ -57,6 +58,10 @@ def process_resource(rows, fields, missing_values):
         row_counter += 1
         try:
             new_row = dict((k, v) for k, v in row.items())
+            # Count how many boolean branches we evaluate for this row. The
+            # Vessel step chains ~40 branches, so this counter x rows reveals
+            # how many total expression evaluations this processor performed.
+            evals = 0
             for field_index in range(len(fields)):
                 field = fields[field_index]
 
@@ -65,13 +70,13 @@ def process_resource(rows, fields, missing_values):
                     function = functions[func_index]
                     expression = field_functions[field_index][func_index]
 
-                    expression_true = (
-                        expression
-                        if isinstance(expression, bool)
-                        else parse_boolean(
+                    if isinstance(expression, bool):
+                        expression_true = expression
+                    else:
+                        evals += 1
+                        expression_true = parse_boolean(
                             row_counter, expression, new_row, missing_values
                         )
-                    )
                     if expression_true:
                         value_ = function.get("value", "")
                         if function.get("math_operation", False):
@@ -98,6 +103,8 @@ def process_resource(rows, fields, missing_values):
                     elif field["target"] not in new_row:
                         new_row[field["target"]] = None
 
+            if timer is not None:
+                timer.bump("expr_evals", evals)
             yield new_row
         except Exception as e:
             raise type(e)(str(e) + f" at row {row_counter}").with_traceback(
@@ -142,10 +149,14 @@ def boolean_add_computed_field(fields, resources=None):
         for rows in package:
             if matcher.match(rows.res.name):
                 missing_values = get_missing_values(rows.res)
-                yield process_resource(
-                    rows,
-                    fields,
-                    missing_values,
+                timer = StepTimer("boolean_add_computed_field", rows.res.name)
+                yield timer.wrap(
+                    process_resource(
+                        timer.rows(rows),
+                        fields,
+                        missing_values,
+                        timer=timer,
+                    )
                 )
             else:
                 yield rows

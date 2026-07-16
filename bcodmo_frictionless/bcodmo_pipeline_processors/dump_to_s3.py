@@ -24,6 +24,7 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
     REDIS_EXPIRES,
 )
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import get_missing_values
+from bcodmo_frictionless.bcodmo_pipeline_processors.timing import StepTimer
 
 WINDOWS_LINE_ENDING = b"\r\n"
 UNIX_LINE_ENDING = b"\n"
@@ -663,7 +664,14 @@ class S3Dumper(DumperBase):
             part_number = 0
             timer = time.time()
 
-            for row in resource:
+            # Speed instrumentation. dump_to_s3 is the pipeline sink, so
+            # step_timer.pull measures how long the ENTIRE upstream pipeline
+            # took to feed this resource, while the extra sub-timers isolate
+            # dump's own costs: CSV serialization (write_row) and time spent
+            # blocked on S3 upload backpressure.
+            step_timer = StepTimer("dump_to_s3", resource_name)
+
+            for row in step_timer.rows(resource):
                 row_number += 1
                 if lat_field_name and lon_field_name:
                     lat_lon_tuple = (
@@ -672,7 +680,9 @@ class S3Dumper(DumperBase):
                     )
                     self.unique_lat_lons[resource_name].add(lat_lon_tuple)
 
+                _t_write = time.perf_counter()
                 writer.write_row(row)
+                step_timer.add("write_row", time.perf_counter() - _t_write)
 
                 if redis_conn is not None and time.time() - timer > 0.75:
                     redis_conn.set(progress_key, row_number, ex=REDIS_EXPIRES)
@@ -695,6 +705,7 @@ class S3Dumper(DumperBase):
                     print(
                         f"Size of current running in MB: {round(size_running / (1024 * 1024), 4)}"
                     )
+                    _t_backpressure = time.perf_counter()
                     while size_running > 1024 * 1024 * 1000:
                         print(
                             f"Size of current running is too big (MB {round(size_running / (1024 * 1024), 4)}) - SLEEPING"
@@ -707,6 +718,9 @@ class S3Dumper(DumperBase):
                                 if not p["proc"].ready()
                             ]
                         )
+                    step_timer.add(
+                        "upload_backpressure", time.perf_counter() - _t_backpressure
+                    )
 
                 if (
                     self.limit_yield is None
@@ -742,6 +756,7 @@ class S3Dumper(DumperBase):
                     progress_key, REDIS_PROGRESS_SAVING_START_FLAG, ex=REDIS_EXPIRES
                 )
 
+            step_timer.log()
             stream.close()
         except Exception as e:
             return self._handle_exception(e, resource_name, row_number=row_number)
