@@ -283,9 +283,9 @@ class S3Dumper(DumperBase):
         if self.unique_lat_lons is not None:
             new_resources = []
             for resource in self.datapackage.descriptor["resources"]:
+                resource_name = resource["name"]
                 if resource_name in self.unique_lat_lons:
                     lat_lons = self.unique_lat_lons[resource_name]
-                    resource_name = resource["name"]
                     output = io.StringIO()
 
                     # Create CSV writer

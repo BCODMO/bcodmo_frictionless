@@ -253,6 +253,163 @@ temporal_data = [
 ]
 
 
+lat_lon_data = [
+    {"lat": "41.5", "lon": "-70.6", "val": "a"},
+    {"lat": "41.5", "lon": "-70.6", "val": "b"},
+    {"lat": "42.0", "lon": "-71.0", "val": "c"},
+]
+
+
+@mock_aws
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_dump_unique_lat_lon():
+    # When dump_unique_lat_lon is enabled and the resource has primary lat/lon
+    # fields defined, a `<resource>.unique_lat_lon` resource holding the set of
+    # unique lat/lon pairs must be written to S3 AND added to the datapackage so
+    # it shows up as a downloadable resource in the front end.
+    server = ThreadedMotoServer()
+    server.start()
+    os.environ["LAMINAR_S3_HOST"] = "http://localhost:5000"
+
+    conn = boto3.client("s3", endpoint_url="http://localhost:5000")
+    conn.create_bucket(Bucket="testing_dump_bucket")
+    flows = [
+        lat_lon_data,
+        set_types(
+            {
+                "types": {
+                    "lat": {"type": "string"},
+                    "lon": {"type": "string"},
+                    "val": {"type": "string"},
+                }
+            }
+        ),
+        update_fields(
+            {
+                "fields": {
+                    "lat": {"bcodmo:": {"standard_name_id": "730", "is_primary": True}},
+                    "lon": {"bcodmo:": {"standard_name_id": "731", "is_primary": True}},
+                }
+            }
+        ),
+        dump_to_s3(
+            {
+                "prefix": "test",
+                "force-format": True,
+                "format": "csv",
+                "dump_unique_lat_lon": True,
+                "bucket_name": "testing_dump_bucket",
+                "data_manager": "test",
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+
+    resource_names = [r.descriptor["name"] for r in datapackage.resources]
+    assert "res_1" in resource_names
+    assert "res_1.unique_lat_lon" in resource_names
+
+    unique_resource = next(
+        r
+        for r in datapackage.resources
+        if r.descriptor["name"] == "res_1.unique_lat_lon"
+    )
+    assert unique_resource.descriptor["bcodmo:"]["unique_lat_lon"] is True
+    assert unique_resource.descriptor["path"] == "res_1.unique_lat_lon.csv"
+
+    body = (
+        conn.get_object(
+            Bucket="testing_dump_bucket", Key="test/res_1.unique_lat_lon.csv"
+        )["Body"]
+        .read()
+        .decode("utf-8")
+    )
+    csv_file = io.StringIO(body)
+    reader = csv.reader(csv_file)
+    dumped_rows = [row for row in reader]
+    assert dumped_rows[0] == ["latitude", "longitude"]
+    # Two unique pairs, order-independent
+    pairs = {tuple(row) for row in dumped_rows[1:]}
+    assert pairs == {("41.5", "-70.6"), ("42.0", "-71.0")}
+    server.stop()
+
+
+@mock_aws
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_dump_unique_lat_lon_multiple_resources():
+    # Regression test: the unique_lat_lon resource must be attached to the
+    # correct originating resource even when it is not the last resource
+    # processed. Previously a stale `resource_name` caused the unique lat/lon
+    # resource to be dropped entirely in multi-resource pipelines.
+    server = ThreadedMotoServer()
+    server.start()
+    os.environ["LAMINAR_S3_HOST"] = "http://localhost:5000"
+
+    conn = boto3.client("s3", endpoint_url="http://localhost:5000")
+    conn.create_bucket(Bucket="testing_dump_bucket")
+
+    # res_1 has primary lat/lon; res_2 has the same columns but they are NOT
+    # marked primary. res_2 is processed last, so the previously-stale
+    # `resource_name` would point at res_2 (which is absent from unique_lat_lons)
+    # and the unique lat/lon resource would be dropped entirely.
+    res_1_data = [
+        {"lat": "41.5", "lon": "-70.6"},
+        {"lat": "42.0", "lon": "-71.0"},
+    ]
+    res_2_data = [
+        {"lat": "10.0", "lon": "20.0"},
+    ]
+
+    flows = [
+        res_1_data,
+        res_2_data,
+        set_types(
+            {
+                "types": {
+                    "lat": {"type": "string"},
+                    "lon": {"type": "string"},
+                }
+            }
+        ),
+        update_fields(
+            {
+                "fields": {
+                    "lat": {"bcodmo:": {"standard_name_id": "730", "is_primary": True}},
+                    "lon": {"bcodmo:": {"standard_name_id": "731", "is_primary": True}},
+                },
+                "resources": ["res_1"],
+            }
+        ),
+        dump_to_s3(
+            {
+                "prefix": "test",
+                "force-format": True,
+                "format": "csv",
+                "dump_unique_lat_lon": True,
+                "bucket_name": "testing_dump_bucket",
+                "data_manager": "test",
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+
+    resource_names = [r.descriptor["name"] for r in datapackage.resources]
+    # The unique lat/lon resource belongs to res_1, even though res_2 was the
+    # last resource processed.
+    assert "res_1.unique_lat_lon" in resource_names
+    assert "res_2.unique_lat_lon" not in resource_names
+
+    body = (
+        conn.get_object(
+            Bucket="testing_dump_bucket", Key="test/res_1.unique_lat_lon.csv"
+        )["Body"]
+        .read()
+        .decode("utf-8")
+    )
+    assert "latitude,longitude" in body
+    server.stop()
+
+
 @mock_aws
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_dump_temporal_output_matches_input_format():
