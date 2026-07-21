@@ -412,6 +412,99 @@ def test_dump_unique_lat_lon_multiple_resources():
 
 @mock_aws
 @pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_dump_unique_lat_lon_no_primary_silent():
+    # When dump_unique_lat_lon is requested but there are no primary lat/lon
+    # fields, the dump silently produces no unique_lat_lon resource instead of
+    # raising. This lets the summary dump request it on every run safely.
+    server = ThreadedMotoServer()
+    server.start()
+    os.environ["LAMINAR_S3_HOST"] = "http://localhost:5000"
+
+    conn = boto3.client("s3", endpoint_url="http://localhost:5000")
+    conn.create_bucket(Bucket="testing_dump_bucket")
+    flows = [
+        lat_lon_data,
+        set_types(
+            {
+                "types": {
+                    "lat": {"type": "string"},
+                    "lon": {"type": "string"},
+                    "val": {"type": "string"},
+                }
+            }
+        ),
+        # Note: no update_fields marking primary lat/lon fields.
+        dump_to_s3(
+            {
+                "prefix": "test",
+                "force-format": True,
+                "format": "csv",
+                "dump_unique_lat_lon": True,
+                "bucket_name": "testing_dump_bucket",
+                "data_manager": "test",
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+
+    resource_names = [r.descriptor["name"] for r in datapackage.resources]
+    assert "res_1" in resource_names
+    assert "res_1.unique_lat_lon" not in resource_names
+    server.stop()
+
+
+@mock_aws
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_dump_unique_lat_lon_partial_primary_silent():
+    # A resource with only a primary latitude (and no primary longitude) has no
+    # complete lat/lon pair to dump, so it is silently skipped rather than
+    # raising.
+    server = ThreadedMotoServer()
+    server.start()
+    os.environ["LAMINAR_S3_HOST"] = "http://localhost:5000"
+
+    conn = boto3.client("s3", endpoint_url="http://localhost:5000")
+    conn.create_bucket(Bucket="testing_dump_bucket")
+    flows = [
+        lat_lon_data,
+        set_types(
+            {
+                "types": {
+                    "lat": {"type": "string"},
+                    "lon": {"type": "string"},
+                    "val": {"type": "string"},
+                }
+            }
+        ),
+        update_fields(
+            {
+                "fields": {
+                    # Only latitude is marked primary; longitude is not.
+                    "lat": {"bcodmo:": {"standard_name_id": "730", "is_primary": True}},
+                }
+            }
+        ),
+        dump_to_s3(
+            {
+                "prefix": "test",
+                "force-format": True,
+                "format": "csv",
+                "dump_unique_lat_lon": True,
+                "bucket_name": "testing_dump_bucket",
+                "data_manager": "test",
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+
+    resource_names = [r.descriptor["name"] for r in datapackage.resources]
+    assert "res_1" in resource_names
+    assert "res_1.unique_lat_lon" not in resource_names
+    server.stop()
+
+
+@mock_aws
+@pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_dump_temporal_output_matches_input_format():
     # A datetime field typed via set_types (with only a `format`, no
     # `outputFormat`) should be written back out in its input format rather

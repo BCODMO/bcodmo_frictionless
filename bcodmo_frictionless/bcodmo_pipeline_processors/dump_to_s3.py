@@ -137,10 +137,6 @@ class S3Dumper(DumperBase):
         self.delete = options.get("delete", False)
         self.limit_yield = options.get("limit_yield", None)
         self.unique_lat_lons = {} if options.get("dump_unique_lat_lon", None) else None
-        # Keep track of the unique lat lons
-        self.unique_lat_lons_found = (
-            False if options.get("dump_unique_lat_lon", None) else True
-        )
 
         self.prefix = prefix
         self.bucket_name = bucket_name
@@ -227,10 +223,6 @@ class S3Dumper(DumperBase):
         return datapackage
 
     def handle_datapackage(self):
-        if self.unique_lat_lons is not None and not self.unique_lat_lons_found:
-            raise Exception(
-                "Missing primary longitude or primary latitude fields in the datapackage. Either properly define the primary fields using updateFields or do not select dump unique lat lon in the dump_to_s3 processor"
-            )
         etags = {}
         filesizes = {}
         self.pool.close()
@@ -611,19 +603,12 @@ class S3Dumper(DumperBase):
                 ) == "731" and bcodmo_metadata.get("is_primary", False):
                     lon_field_name = field.get("name", "")
 
+            # If a resource has both primary lat and lon fields, collect its
+            # unique lat/lon pairs. When the primary fields are missing or only
+            # partially defined there is simply nothing to dump, so we silently
+            # skip it rather than failing the run.
             if lat_field_name and lon_field_name:
-                self.unique_lat_lons_found = True
                 self.unique_lat_lons[resource_name] = set()
-            else:
-                if not lat_field_name and lon_field_name:
-                    raise Exception(
-                        "Missing primary latitude field in the datapackage. Either properly define the primary latitude field using updateFields or do not select dump unique lat lon in the dump_to_s3 processor"
-                    )
-
-                if lat_field_name and not lon_field_name:
-                    raise Exception(
-                        "Missing primary longitude field in the datapackage. Either properly define the primary longitude field using updateFields or do not select dump unique lat lon in the dump_to_s3 processor"
-                    )
         path = resource.res.source
         if path.startswith("."):
             path = path[1:]
