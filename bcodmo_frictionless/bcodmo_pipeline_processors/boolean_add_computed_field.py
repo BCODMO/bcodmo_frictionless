@@ -105,38 +105,43 @@ def process_resource(rows, fields, missing_values):
             )
 
 
+def compute_schema_fields(package_fields, fields):
+    """Single source for the boolean_add_computed_field schema transform.
+
+    Used by the dataflows ``func`` below AND by the DuckDB backend's
+    ``Processor.update_schema`` (bcodmo_frictionless.duckdb_backend) so the two
+    execution engines can never diverge on schema. Appends or replaces each
+    ``target`` field, preserving the original field order.
+    """
+    new_field_names = [f["target"] for f in fields]
+    new_fields_dict = {
+        f["target"]: {
+            "name": f["target"],
+            "type": f.get("type", "string"),
+        }
+        for f in fields
+    }
+
+    processed_fields = []
+    for f in package_fields:
+        if f["name"] in new_field_names:
+            processed_fields.append(new_fields_dict[f["name"]])
+            new_field_names.remove(f["name"])
+        else:
+            processed_fields.append(f)
+    for fname in new_field_names:
+        processed_fields.append(new_fields_dict[fname])
+    return processed_fields
+
+
 def boolean_add_computed_field(fields, resources=None):
     def func(package):
         matcher = ResourceMatcher(resources, package.pkg)
         for resource in package.pkg.descriptor["resources"]:
             if matcher.match(resource["name"]):
-                # Get the old fields
-                package_fields = resource["schema"]["fields"]
-
-                # Create a list of names and a lookup dict for the new fields
-                new_field_names = [f["target"] for f in fields]
-                new_fields_dict = {
-                    f["target"]: {
-                        "name": f["target"],
-                        "type": f.get("type", "string"),
-                    }
-                    for f in fields
-                }
-
-                # Iterate through the old fields, updating where necessary to maintain order
-                processed_fields = []
-                for f in package_fields:
-                    if f["name"] in new_field_names:
-                        processed_fields.append(new_fields_dict[f["name"]])
-                        new_field_names.remove(f["name"])
-                    else:
-                        processed_fields.append(f)
-                # Add new fields that were not added through the update
-                for fname in new_field_names:
-                    processed_fields.append(new_fields_dict[fname])
-
-                # Add back to the datapackage
-                resource["schema"]["fields"] = processed_fields
+                resource["schema"]["fields"] = compute_schema_fields(
+                    resource["schema"]["fields"], fields
+                )
 
         yield package.pkg
         for rows in package:
