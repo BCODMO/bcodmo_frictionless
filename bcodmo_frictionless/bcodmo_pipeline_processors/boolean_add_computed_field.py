@@ -12,91 +12,105 @@ from dataflows.helpers.resource_matcher import ResourceMatcher
 
 from bcodmo_frictionless.bcodmo_pipeline_processors.boolean_processor_helper import (
     NULL_VALUES,
+    compile_boolean,
+    compile_math,
     get_expression,
     math_expr,
-    parse_boolean,
-    parse_math,
 )
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import get_missing_values
 
 
-def process_resource(rows, fields, missing_values):
-    field_functions = []
-    value_functions = []
-    for index in range(len(fields)):
-        field = fields[index]
-        field_functions.append([])
-        value_functions.append([])
-        for function in field.get("functions", []):
+def _compile_field_plan(field):
+    """
+    Compile a field's functions once, up front, into a list of
+    ``(predicate, apply_value)`` pairs.
+
+    - ``predicate`` is either the literal ``True`` (an ``always_run`` function)
+      or a callable ``(row_counter, new_row, missing_values) -> truthy``.
+    - ``apply_value`` is a callable ``(row_counter, row, new_row, missing_values)
+      -> new column value`` that resolves the function's ``value`` (a math
+      expression or a str.format template) and applies the field's temporal type.
+
+    The plan is returned in reverse function order so the row loop can stop at
+    the first matching function. Because the original processor evaluated every
+    function and let the last matching one win ("last match wins"), taking the
+    first match while iterating in reverse produces the identical result while
+    skipping the remaining branches.
+    """
+    field_type = field.get("type", None)
+
+    def make_apply(function):
+        value_string = function.get("value", "")
+        if function.get("math_operation", False):
+            value_expression = get_expression(value_string, math_expr)
+            math_fn = compile_math(value_expression)
+
+            def apply_value(row_counter, row, new_row, missing_values):
+                new_col = math_fn(row_counter, new_row, missing_values)
+                return _apply_field_type(new_col, field_type)
+
+            return apply_value
+
+        def apply_value(row_counter, row, new_row, missing_values):
+            new_val = value_string.format(**row)
+            if new_val in NULL_VALUES:
+                new_val = None
+            return _apply_field_type(new_val, field_type)
+
+        return apply_value
+
+    plan = []
+    for function in field.get("functions", []):
+        if function.get("always_run", False):
+            predicate = True
+        else:
             boolean_string = function.get("boolean", "")
-            value_string = function.get("value", "")
-            always_run = function.get("always_run", False)
+            if not boolean_string:
+                raise Exception(
+                    f"Missing boolean string for function in boolean_add_computed_fields"
+                )
+            predicate = compile_boolean(get_expression(boolean_string))
+        plan.append((predicate, make_apply(function)))
 
-            if always_run:
-                # Send True to the function
-                field_functions[index].append(True)
-            else:
-                if not boolean_string:
-                    raise Exception(
-                        f"Missing boolean string for function in boolean_add_computed_fields"
-                    )
+    # Reversed so the row loop can break on the first (i.e. last-defined) match.
+    plan.reverse()
+    return plan
 
-                # Parse the field boolean string
-                field_expression = get_expression(boolean_string)
-                field_functions[index].append(field_expression)
 
-            # Parse the value boolean string
-            if function.get("math_operation", False):
-                value_expression = get_expression(value_string, math_expr)
-                value_functions[index].append(value_expression)
-            else:
-                value_functions.append(None)
+def _apply_field_type(new_col, field_type):
+    if field_type in ["datetime", "date", "time"]:
+        new_col = dateutil.parser.parse(new_col)
+        if field_type == "date":
+            new_col = new_col.date()
+        if field_type == "time":
+            new_col = new_col.strftime("%H:%M:%S")
+    return new_col
+
+
+def process_resource(rows, fields, missing_values):
+    # Compile every field's functions once, before touching any rows.
+    field_plans = [(field["target"], _compile_field_plan(field)) for field in fields]
 
     row_counter = 0
     for row in rows:
         row_counter += 1
         try:
             new_row = dict((k, v) for k, v in row.items())
-            for field_index in range(len(fields)):
-                field = fields[field_index]
-
-                functions = field.get("functions", [])
-                for func_index in range(len(functions)):
-                    function = functions[func_index]
-                    expression = field_functions[field_index][func_index]
-
-                    expression_true = (
-                        expression
-                        if isinstance(expression, bool)
-                        else parse_boolean(
-                            row_counter, expression, new_row, missing_values
+            for target, plan in field_plans:
+                for predicate, apply_value in plan:
+                    if predicate is True or predicate(
+                        row_counter, new_row, missing_values
+                    ):
+                        new_row[target] = apply_value(
+                            row_counter, row, new_row, missing_values
                         )
-                    )
-                    if expression_true:
-                        value_ = function.get("value", "")
-                        if function.get("math_operation", False):
-                            # Handle a mathematical equation in value
-                            value_expression = value_functions[field_index][func_index]
-                            new_col = parse_math(
-                                row_counter, value_expression, new_row, missing_values
-                            )
-                        else:
-                            new_val = value_.format(**row)
-                            if new_val in NULL_VALUES:
-                                new_val = None
-                            new_col = new_val
-
-                        field_type = field.get("type", None)
-                        if field_type in ["datetime", "date", "time"]:
-                            new_col = dateutil.parser.parse(new_col)
-                            if field_type == "date":
-                                new_col = new_col.date()
-                            if field_type == "time":
-                                new_col = new_col.strftime("%H:%M:%S")
-
-                        new_row[field["target"]] = new_col
-                    elif field["target"] not in new_row:
-                        new_row[field["target"]] = None
+                        break
+                else:
+                    # No function matched; only default to None if the target
+                    # isn't already present (matching the original behaviour of
+                    # leaving an existing value untouched).
+                    if target not in new_row:
+                        new_row[target] = None
 
             yield new_row
         except Exception as e:
