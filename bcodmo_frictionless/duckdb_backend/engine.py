@@ -18,12 +18,45 @@ insert), so leaf row processors are never-OOM like load/dump/join/sort.
 
 import itertools
 import os
+import time
 from collections import deque
 
 import duckdb
 
 from .processor import REGISTRY
 from .casting import cast_rows, format_out_iter
+
+
+_BYTE_UNITS = {
+    "": 1, "B": 1, "BYTES": 1,
+    "KB": 1000, "MB": 1000 ** 2, "GB": 1000 ** 3, "TB": 1000 ** 4,
+    "KIB": 1024, "MIB": 1024 ** 2, "GIB": 1024 ** 3, "TIB": 1024 ** 4,
+}
+
+
+def _parse_bytes(s):
+    """Parse a DuckDB size string ("256MB", "1.5 GiB", "488.2 MiB", "0 bytes") to an
+    int number of bytes. Returns 0 on anything unparseable. Accepts an int/float
+    passthrough too (already bytes)."""
+    if s is None:
+        return 0
+    if isinstance(s, (int, float)):
+        return int(s)
+    txt = str(s).strip()
+    if not txt:
+        return 0
+    num = ""
+    unit = ""
+    for ch in txt:
+        if ch.isdigit() or ch in ".-":
+            num += ch
+        elif not ch.isspace():
+            unit += ch
+    try:
+        value = float(num)
+    except ValueError:
+        return 0
+    return int(value * _BYTE_UNITS.get(unit.upper(), 1))
 
 
 class ResourceState:
@@ -86,6 +119,73 @@ class Engine:
         # Excludes ``resources`` (those come from the per-resource state).
         self.package_descriptor: dict = {}
         self._seq = 0
+        # Progress reporting (DuckDB lane). ``None`` => disabled (no cache_id/redis);
+        # set by the runner. See progress.py and ``memory_stats``. A separate cursor
+        # keeps memory introspection off the main/write cursors so the background
+        # sampler can read while a query streams (same pattern as ``_wc``).
+        self.reporter = None
+        self._memory_limit_str = memory_limit
+        self._memory_limit_bytes_cache = _parse_bytes(memory_limit) if memory_limit else None
+        self._sample_cursor = None
+
+    # -- memory / spill introspection --------------------------------------
+    def memory_stats(self):
+        """Snapshot DuckDB's memory + temp-spill usage for the progress gauge.
+        Returns byte ints: ``memory_used`` (sum over subsystems), ``memory_limit``,
+        ``temp_used`` + ``temp_files`` (on-disk spill), and ``by_tag`` (top few
+        subsystems by mem+tmp -- the "what's overflowing to disk" breakdown). Never
+        raises: introspection failure degrades to zeros rather than killing a run."""
+        cur = self._sampling_cursor()
+        used = 0
+        by_tag = []
+        try:
+            for tag, mem, tmp in cur.execute(
+                "SELECT tag, memory_usage_bytes, temporary_storage_bytes "
+                "FROM duckdb_memory()"
+            ).fetchall():
+                used += int(mem or 0)
+                by_tag.append(
+                    {"tag": tag, "mem": int(mem or 0), "tmp": int(tmp or 0)}
+                )
+        except Exception:
+            pass
+        temp_used = 0
+        temp_files = 0
+        try:
+            n, total = cur.execute(
+                "SELECT count(*), coalesce(sum(size), 0) FROM duckdb_temporary_files()"
+            ).fetchone()
+            temp_files = int(n or 0)
+            temp_used = int(total or 0)
+        except Exception:
+            pass
+        by_tag.sort(key=lambda t: t["mem"] + t["tmp"], reverse=True)
+        return {
+            "memory_used": int(used),
+            "memory_limit": self._memory_limit_bytes(cur),
+            "temp_used": temp_used,
+            "temp_files": temp_files,
+            "by_tag": by_tag[:5],
+            "ts": time.time(),
+        }
+
+    def _sampling_cursor(self):
+        if self._sample_cursor is None:
+            self._sample_cursor = self.con.cursor()
+        return self._sample_cursor
+
+    def _memory_limit_bytes(self, cur):
+        if self._memory_limit_bytes_cache is not None:
+            return self._memory_limit_bytes_cache
+        # No explicit limit configured -> read DuckDB's default (~80% RAM) once.
+        try:
+            for row in cur.execute("PRAGMA database_size").fetchall():
+                # database_size columns end with (..., memory_usage, memory_limit)
+                self._memory_limit_bytes_cache = _parse_bytes(row[-1])
+                break
+        except Exception:
+            self._memory_limit_bytes_cache = 0
+        return self._memory_limit_bytes_cache or 0
 
     # -- helpers used by Processor.apply ------------------------------------
     def state(self, name, relation, schema, descriptor=None):
@@ -114,13 +214,16 @@ class Engine:
         return vname
 
     # -- ingest -------------------------------------------------------------
-    def _fill_table(self, tbl, cols, rows, batch):
+    def _fill_table(self, tbl, cols, rows, batch, resource=None):
         """Create ``tbl`` (``__rownum__`` BIGINT + VARCHAR ``cols``) and stream
         ``rows`` (dicts) into it in bounded batches, assigning ``__rownum__`` by
         enumeration. Returns nothing; only ``batch`` rows are ever held in Python.
 
         ``__rownum__`` is assigned by enumeration. See ``_batch_insert`` for the
-        insert mechanics."""
+        insert mechanics. When ``resource`` + a reporter are set, each batch reports
+        the cumulative row count and a synchronous memory snapshot -- so ingest (the
+        fork-prone load phase, where the background sampler must not run) still shows
+        rows-into-SQL and memory progress."""
         coldefs = ", ".join([f'"{c}" VARCHAR' for c in cols])
         self._wc.execute(
             f'CREATE OR REPLACE TABLE "{tbl}" ("__rownum__" BIGINT, {coldefs})'
@@ -128,9 +231,14 @@ class Engine:
         param_rows = (
             [i] + [_s(r.get(c)) for c in cols] for i, r in enumerate(rows)
         )
-        self._batch_insert(tbl, len(cols) + 1, param_rows, batch)
+        on_batch = None
+        if resource and self.reporter is not None:
+            def on_batch(total):
+                self.reporter.rows(resource, total)
+                self.reporter.write_memory(self.memory_stats())
+        self._batch_insert(tbl, len(cols) + 1, param_rows, batch, on_batch=on_batch)
 
-    def _batch_insert(self, tbl, ncols, param_rows, batch):
+    def _batch_insert(self, tbl, ncols, param_rows, batch, on_batch=None):
         """Insert an iterable of param-lists (each of length ``ncols``, first value
         = ``__rownum__``) into ``tbl`` via one multi-row ``INSERT ... VALUES`` per
         batch -- a single prepared statement binding ``batch*ncols`` params, ~18x
@@ -150,12 +258,18 @@ class Engine:
             self._wc.execute(stmt, [v for row in buf for v in row])
 
         buf = []
+        total = 0
         for pr in param_rows:
             buf.append(pr)
             if len(buf) >= batch:
                 _flush(buf)
+                total += len(buf)
                 buf = []
+                if on_batch is not None:
+                    on_batch(total)
         _flush(buf)
+        if buf and on_batch is not None:
+            on_batch(total + len(buf))
 
     def ingest_iter(self, name, rows, schema, batch=10000, descriptor=None):
         """Build a base relation for ``name`` from a (possibly streaming) iterable
@@ -168,7 +282,7 @@ class Engine:
         table is ``_ingest_{name}``; do not use this to re-ingest a resource that
         is being READ concurrently (see ``reingest_stream``)."""
         cols = [f["name"] for f in schema]
-        self._fill_table(f"_ingest_{name}", cols, rows, batch)
+        self._fill_table(f"_ingest_{name}", cols, rows, batch, resource=name)
         rel = self.con.sql(f'SELECT * FROM "_ingest_{name}"')
         self.resources[name] = ResourceState(
             name, rel, [dict(f) for f in schema], descriptor
@@ -185,7 +299,7 @@ class Engine:
         repointed at the new relation (carrying the prior descriptor by default)."""
         cols = [f["name"] for f in schema]
         tbl = f"_reingest_{name}_{self._next()}"
-        self._fill_table(tbl, cols, rows, batch)
+        self._fill_table(tbl, cols, rows, batch, resource=name)
         rel = self.con.sql(f'SELECT * FROM "{tbl}"')
         if descriptor is None and name in self.resources:
             descriptor = self.resources[name].descriptor

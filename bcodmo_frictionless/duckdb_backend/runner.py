@@ -16,9 +16,23 @@ so enabling the engine can never fail a run it wouldn't have failed before.
 
 import datetime
 import decimal
+import logging
 
 from .engine import Engine
 from .processor import REGISTRY
+from .progress import MemorySampler, make_reporter
+
+
+def _phase(run):
+    """Map a run-name to a coarse progress phase for the UI/logs. ``load*`` ingests
+    into SQL, ``dump*`` writes out, everything else is an in-memory transform."""
+    r = run or ""
+    leaf = r.split(".")[-1]
+    if leaf.startswith("load") or leaf == "standard_load_multiple":
+        return "ingesting"
+    if leaf.startswith("dump"):
+        return "dumping"
+    return "running"
 
 
 class StepError(Exception):
@@ -68,22 +82,65 @@ def unsupported_reasons(steps):
     return reasons
 
 
-def execute(steps, memory_limit=None, temp_directory=None, threads=None):
+def execute(
+    steps, memory_limit=None, temp_directory=None, threads=None, cache_id=None,
+    reporter=None,
+):
     """Run already-prepared ``steps`` on a fresh Engine and return it.
 
     ``memory_limit`` + ``temp_directory`` arm DuckDB's out-of-core spill so the run
     is never-OOM (see tests/test_never_oom.py). ``threads`` defaults to Engine's
     fork-safe single-threaded default (the pipeline ends in a fork-based dump).
     Raises ``StepError`` on the first failing step so the caller can attribute it;
-    the partially-built engine is discarded."""
+    the partially-built engine is discarded.
+
+    Progress: when ``cache_id`` (or an explicit ``reporter``) resolves to a redis
+    reporter, each step is reported (which processor is running) and logged with the
+    ``[ENGINE]`` prefix, and a background ``MemorySampler`` animates the memory/disk
+    gauge during the transform window. The sampler is FORK-UNSAFE next to the
+    billiard-forking load/dump, so it is started only entering the first ``running``
+    step and joined before any ``dumping`` step (ingest reports synchronously via the
+    engine; see progress.py). It is always joined in ``finally``."""
+    total = len(steps)
+    reporter = reporter if reporter is not None else make_reporter(cache_id)
     eng = Engine(
         threads=threads, memory_limit=memory_limit, temp_directory=temp_directory
     )
-    for index, step in enumerate(steps):
-        try:
-            eng.apply(step)
-        except Exception as cause:
-            raise StepError(index, step.get("run", "unknown"), cause) from cause
+    eng.reporter = reporter
+
+    sampler = None
+    if reporter is not None:
+        sampler = MemorySampler(
+            eng, reporter,
+            on_sample=lambda s: logging.info(
+                "[ENGINE] mem %d/%d bytes, spill %d bytes (%d files)",
+                s.get("memory_used", 0), s.get("memory_limit", 0),
+                s.get("temp_used", 0), s.get("temp_files", 0),
+            ),
+        )
+    try:
+        for index, step in enumerate(steps):
+            run = step.get("run", "unknown")
+            phase = _phase(run)
+            # Fork safety: stop the sampler before a dumping step (billiard fork);
+            # start it entering the first transforming step (fork-free window).
+            if sampler is not None:
+                if phase == "dumping":
+                    sampler.stop()
+                elif phase == "running":
+                    sampler.start()
+            if reporter is not None:
+                reporter.step(index, total, run, phase)
+            logging.info(
+                "[ENGINE] step %d/%d %s (%s)", index + 1, total, run, phase
+            )
+            try:
+                eng.apply(step)
+            except Exception as cause:
+                raise StepError(index, run, cause) from cause
+    finally:
+        if sampler is not None:
+            sampler.stop()
     return eng
 
 
