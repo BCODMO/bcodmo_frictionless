@@ -6,6 +6,10 @@ from kvfile import KVFile
 from dataflows import Flow
 from dataflows.helpers.resource_matcher import ResourceMatcher
 
+from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
+    KVFileBuildProgress,
+)
+
 
 # Number of entries the duplicate's in-memory KVFile cache holds before it starts
 # spilling to (and re-reading from) the on-disk SQLite/LevelDB store. The kvfile
@@ -19,15 +23,21 @@ from dataflows.helpers.resource_matcher import ResourceMatcher
 KVFILE_CACHE_SIZE = int(os.environ.get("KVFILE_CACHE_SIZE", 1_000_000))
 
 
-def saver(resource, db, batch_size):
+def saver(resource, db, batch_size, cache_id=None):
+    # Buffering every source row into the KVFile is a blocking step; publish the
+    # number of rows buffered so far so the frontend can see it building up (and
+    # that it's alive vs stalled).
+    progress = KVFileBuildProgress(cache_id, resource.res.name, "duplicate")
     gen = db.insert_generator(
         (('{:08x}'.format(idx), row)
          for idx, row
          in enumerate(resource)),
         batch_size=batch_size
     )
-    for _, row in gen:
+    for count, (_, row) in enumerate(gen, start=1):
+        progress.update(count)
         yield row
+    progress.finish()
 
 
 def loader(db):
@@ -42,6 +52,7 @@ def duplicate(
     target_path=None,
     batch_size=1000,
     duplicate_to_end=False,
+    cache_id=None,
 ):
     def func(package):
         source_, target_name_, target_path_ = source, target_name, target_path
@@ -75,7 +86,7 @@ def duplicate(
         for resource in package:
             if resource.res.name == source_:
                 db = KVFile(size=KVFILE_CACHE_SIZE)
-                yield saver(resource, db, batch_size)
+                yield saver(resource, db, batch_size, cache_id=cache_id)
                 if duplicate_to_end:
                     dbs.append(db)
                 else:
@@ -115,5 +126,6 @@ def flow(parameters):
             parameters.get("target-path"),
             parameters.get("batch_size", 1000),
             parameters.get("duplicate_to_end", False),
+            cache_id=parameters.get("cache_id"),
         ),
     )

@@ -8,6 +8,10 @@ from bitstring import BitArray
 from dataflows import Flow
 from dataflows.helpers.resource_matcher import ResourceMatcher
 
+from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
+    KVFileBuildProgress,
+)
+
 
 # Number of entries the sort's in-memory KVFile cache holds before it starts
 # spilling to (and re-reading from) the on-disk SQLite/LevelDB store. The kvfile
@@ -63,21 +67,28 @@ class KeyCalc(object):
         return self.calculator(row)
 
 
-def _sorter(rows, key_calc, reverse, batch_size):
+def _sorter(rows, key_calc, reverse, batch_size, cache_id=None, resource_name=None):
     db = KVFile(size=KVFILE_CACHE_SIZE)
+
+    # Buffering every row into the KVFile is a blocking step; publish the number
+    # of rows buffered so far so the frontend can see it building up (and that
+    # it's alive vs stalled).
+    progress = KVFileBuildProgress(cache_id, resource_name, "sort")
 
     def process(rows):
         for row_num, row in enumerate(rows):
             key = key_calc(row) + '{:08x}'.format(row_num)
+            progress.update(row_num + 1)
             yield (key, row)
 
     db.insert(process(rows), batch_size=batch_size)
+    progress.finish()
     for _, value in db.items(reverse=reverse):
         yield value
     db.close()
 
 
-def sort_rows(key, resources=None, reverse=False, batch_size=1000):
+def sort_rows(key, resources=None, reverse=False, batch_size=1000, cache_id=None):
     key_calc = KeyCalc(key)
 
     def func(package):
@@ -85,7 +96,14 @@ def sort_rows(key, resources=None, reverse=False, batch_size=1000):
         yield package.pkg
         for rows in package:
             if matcher.match(rows.res.name):
-                yield _sorter(rows, key_calc, reverse, batch_size)
+                yield _sorter(
+                    rows,
+                    key_calc,
+                    reverse,
+                    batch_size,
+                    cache_id=cache_id,
+                    resource_name=rows.res.name,
+                )
             else:
                 yield rows
 
@@ -117,5 +135,6 @@ def flow(parameters):
             parameters["sort-by"],
             resources=parameters.get("resources"),
             reverse=parameters.get("reverse"),
+            cache_id=parameters.get("cache_id"),
         ),
     )
