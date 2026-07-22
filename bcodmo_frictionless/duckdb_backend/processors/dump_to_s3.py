@@ -97,7 +97,12 @@ class DumpToS3(Processor):
         # Build the input datapackage from the engine's resources, mirroring the
         # descriptors the dataflows lane would hand the dumper.
         descriptors = [_resource_descriptor(engine.resources[n]) for n in names]
-        dp = Package(descriptor={"resources": copy.deepcopy(descriptors)})
+        # Fold in any package-level metadata set by update_package (title/name/
+        # custom keys); ``resources`` always comes from the per-resource state.
+        dp = Package(descriptor={
+            **copy.deepcopy(engine.package_descriptor),
+            "resources": copy.deepcopy(descriptors),
+        })
         # LAZY typed-row streams: S3Dumper.rows_processor consumes row-by-row and
         # flushes multipart chunks, and typed_rows_iter fetches from DuckDB in
         # bounded chunks -- so the whole dump stays memory-bounded (never-OOM).

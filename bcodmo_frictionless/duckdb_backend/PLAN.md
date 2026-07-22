@@ -163,8 +163,12 @@ Three layers, all in CI:
   read-while-write hazard (reading a resource while writing its replacement) is
   solved by a dedicated write cursor (`Engine._wc`): reads stay on the main
   connection (relations + their `.query()` aliases are connection-bound), writes
-  go on the cursor (shared catalog, independent result). Proven: streaming peak ≪
-  full-materialization peak (RSS-sampled) for egress, large join, and large sort;
+  go on the cursor (shared catalog, independent result). **Leaf UDF processors also
+  STREAM** now: `Engine.udf_map` fetches input in chunks, runs `process_rows` as one
+  lazy pass, and streams the 1:1 output (rownum carried via a deque) into a fresh
+  table — closing the last hole, so EVERY supported pipeline (load → leaf UDFs →
+  structural → dump) is never-OOM. Proven: streaming peak ≪ full-materialization
+  peak (RSS-sampled) for egress, large join, large sort, and a large leaf UDF;
   lazy==eager at scale; completion under a `memory_limit` below the dataset.
 
 ### 3.3 The invariant, stated plainly
@@ -358,16 +362,29 @@ datapackage.json, pipeline-spec.yaml, `dump_unique_lat_lon`). Local ephemeral di
 
 ---
 
-## 8. Router & worker lanes (thin laminar_server seam)
+## 8. Router & worker lanes (thin laminar_server seam) — ✅ DONE
 
-- `router.can_run(spec)` reads the generated capability manifest (§3.4): DuckDB
-  iff every step is `prim|dsl|udf|schema|bridge`-supported _and_ its tests are
-  green. Else the whole pipeline goes to the dataflows lane (per-pipeline routing;
-  no intra-pipeline engine mixing; avoids the DuckDB-C-ext-under-PyPy conflict).
-- laminar_server integration is minimal: `run.py`/task submission calls
-  `bcodmo_frictionless.duckdb_backend.router.can_run(...)` and picks the Celery
-  queue (`duckdb` CPython worker vs the existing worker, optionally PyPy). All
-  engine logic stays in bcodmo_frictionless.
+Implemented as `duckdb_backend/runner.py` + a thin branch in
+`laminar_server/app/pipeline/run.py::_run_pipeline`:
+
+- `runner.is_supported(spec)` = every step in the processor REGISTRY and no
+  `checkpoint` (a dataflows/EFS-only feature). Per-pipeline routing; no
+  intra-pipeline engine mixing. Else the whole pipeline runs on the dataflows lane
+  UNCHANGED.
+- `_should_use_duckdb(steps, metadata)` enables the engine per-run via
+  `metadata['engine']=='duckdb'` or env `LAMINAR_ENGINE=duckdb`, gated by
+  `is_supported`. `_run_pipeline_duckdb` mirrors the dataflows step-prep (cache_id /
+  pipeline_spec injection, dump-bucket check, summary dump, dump_location marker,
+  lat/lon datapackage reuse, redis cleanup) and delegates execution to
+  `runner.execute` (a memory_limit/temp_directory Engine → never-OOM) + the UI
+  sample to `runner.build_sample`. Same `(error, cache_files, sample)` contract.
+- All engine logic stays in `bcodmo_frictionless.duckdb_backend`; laminar_server
+  gets only the gate + orchestration glue (defensive import → falls back if the
+  backend is unavailable). Config env: `LAMINAR_ENGINE`,
+  `LAMINAR_DUCKDB_MEMORY_LIMIT`, `TMP_DIRECTORY`.
+- NOT YET: Celery-queue selection (CPython `duckdb` worker vs PyPy) — the seam
+  currently runs inline in the existing worker; queue routing is a follow-up.
+  End-to-end staging validation still pending (only `runner` is unit-tested).
 
 ---
 

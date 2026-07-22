@@ -7,9 +7,10 @@ See PLAN.md. Core idea: each processor's logic is authored ONCE (the
 it. Any ``to_sql`` fast path is a provably-verified mirror of ``process_rows``,
 enforced by the differential/fuzz tests in ``equivalence/`` and ``tests/``.
 
-Phase 0 scope: the contract, the DSL->SQL compiler, a minimal engine (native
-``to_sql`` path + UDF-default ``process_rows`` path), one reference processor,
-and the equivalence harness. Not yet wired into laminar_server.
+Wired into laminar_server via ``runner.py`` (``is_supported`` / ``execute`` /
+``build_sample``) behind the ``app/pipeline/run.py`` router seam -- enabled per-run
+by ``metadata['engine']=='duckdb'`` or ``LAMINAR_ENGINE=duckdb``, with automatic
+fallback to the dataflows lane for anything ``is_supported`` rejects.
 """
 
 from .processor import Processor, register, REGISTRY  # noqa: F401
@@ -44,3 +45,5 @@ from .processors import split_column  # noqa: F401
 from .processors import string_format  # noqa: F401
 from .processors import unpivot  # noqa: F401
 from .processors import update_fields  # noqa: F401
+from .processors import update_package  # noqa: F401
+from .processors import update_resource  # noqa: F401

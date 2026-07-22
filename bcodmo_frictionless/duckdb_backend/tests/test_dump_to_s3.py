@@ -148,6 +148,34 @@ def test_dump_after_set_types(s3_server):
     ])
 
 
+def test_dump_after_update_package(s3_server):
+    # update_package's top-level metadata must appear in datapackage.json identically.
+    _assert_dump_identical(s3_server, [
+        _load(**{"from": SRC_CSV, "name": "res", "format": "csv"}),
+        {"run": "update_package",
+         "parameters": {"title": "My Package", "name": "pkg-name", "custom_key": "v"}},
+        _dump(),
+    ])
+
+
+def test_dump_after_update_resource(s3_server):
+    # update_resource's resource-level metadata (incl. a rename) must appear in
+    # datapackage.json and drive the CSV object key identically in both lanes.
+    art = _assert_dump_identical(s3_server, [
+        _load(**{"from": SRC_CSV, "name": "res", "format": "csv"}),
+        {"run": "update_resource",
+         "parameters": {"resources": "res",
+                        "metadata": {"name": "renamed", "title": "My Resource",
+                                     "bcodmo:extra": "rv"}}},
+        _dump(),
+    ])
+    # The rename changes the resource's datapackage NAME (not its file path, which
+    # load fixed to res.csv); the merged metadata appears in datapackage.json.
+    assert f"{PREFIX}/res.csv" in art
+    dp = art[f"{PREFIX}/datapackage.json"]
+    assert b'"renamed"' in dp and b'"My Resource"' in dp and b'"bcodmo:extra"' in dp
+
+
 def test_dump_multiple_resources(s3_server):
     a = os.path.join(_HERE, "data_load", "a.csv")
     b = os.path.join(_HERE, "data_load", "b.csv")

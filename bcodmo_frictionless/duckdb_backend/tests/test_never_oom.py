@@ -36,6 +36,11 @@ from bcodmo_frictionless.duckdb_backend.engine import Engine
 ROWS = int(os.environ.get("DUCKDB_OOM_ROWS", "400000"))
 _PAGE = os.sysconf("SC_PAGE_SIZE")
 
+# RSS-peak assertions only carry signal at scale: below this the full-materialization
+# yardstick is a few MB and process noise dominates, so a smaller DUCKDB_OOM_ROWS
+# (used to run the suite fast) checks correctness only, not the memory ratio.
+_MEM_MEANINGFUL = ROWS >= 200_000
+
 
 def _rss_mb():
     with open("/proc/self/statm") as f:
@@ -106,14 +111,15 @@ def test_streaming_egress_is_memory_bounded(big_csv, tmp_path):
 
     assert count == ROWS
     assert len(full) == ROWS
-    # The whole point: streaming holds O(chunk) rows, materializing holds O(N).
-    assert streamed.peak < materialized.peak * 0.6, (
-        f"streaming peak {streamed.peak:.0f}MB not clearly below "
-        f"materialized peak {materialized.peak:.0f}MB -- egress may be materializing"
-    )
-    # And the streamed peak must be small in absolute terms (chunk-bounded), i.e.
-    # it must NOT scale with the ~ROWS*400B a full Python list would occupy.
-    assert streamed.peak < max(120.0, materialized.peak * 0.5), streamed.peak
+    if _MEM_MEANINGFUL:
+        # The whole point: streaming holds O(chunk) rows, materializing holds O(N).
+        assert streamed.peak < materialized.peak * 0.6, (
+            f"streaming peak {streamed.peak:.0f}MB not clearly below "
+            f"materialized peak {materialized.peak:.0f}MB -- egress may be materializing"
+        )
+        # And the streamed peak must be small in absolute terms (chunk-bounded), i.e.
+        # it must NOT scale with the ~ROWS*400B a full Python list would occupy.
+        assert streamed.peak < max(120.0, materialized.peak * 0.5), streamed.peak
 
 
 def test_lazy_egress_equals_eager(big_csv, tmp_path):
@@ -143,6 +149,28 @@ def test_completes_under_tight_memory_limit(big_csv, tmp_path):
     assert first["col1"] == "row0" and first["col2"] == 0  # __rownum__ order held
 
 
+# -- leaf UDF processor -----------------------------------------------------
+
+def test_large_udf_leaf_is_memory_bounded(big_csv, tmp_path):
+    """A leaf UDF processor (round_fields -> the streaming udf_map path) over a
+    large resource must stay memory-bounded: input streams from DuckDB in chunks,
+    process_rows runs as one lazy pass, and the output streams into a fresh table
+    -- nothing materializes the resource in Python."""
+    eng = _loaded_engine(big_csv, tmp_path)  # col3 -> number
+
+    with _PeakSampler() as udf:
+        eng.run([{"run": "bcodmo_pipeline_processors.round_fields",
+                  "parameters": {"fields": [{"name": "col3", "digits": 1}]}}])
+
+    rows = eng.typed_rows_iter("res")
+    first = next(rows)
+    count = 1 + sum(1 for _ in rows)
+    assert count == ROWS
+    assert first["col3"] == 0  # row0: col3 = 0*1.5 = 0.0 rounded to 1 digit
+    if _MEM_MEANINGFUL:
+        assert udf.peak < max(160.0, ROWS * 400 / 1e6 * 0.5), udf.peak
+
+
 # -- structural op: large sort ---------------------------------------------
 
 def test_large_sort_is_memory_bounded(big_csv, tmp_path):
@@ -161,7 +189,8 @@ def test_large_sort_is_memory_bounded(big_csv, tmp_path):
     count = 1 + sum(1 for _ in rows)
     assert count == ROWS
     assert first["col2"] == 0  # ascending: smallest col2 first (values 0..999)
-    assert sorted_.peak < max(160.0, ROWS * 400 / 1e6 * 0.5), sorted_.peak
+    if _MEM_MEANINGFUL:
+        assert sorted_.peak < max(160.0, ROWS * 400 / 1e6 * 0.5), sorted_.peak
 
 
 # -- structural op: large join ---------------------------------------------
@@ -225,4 +254,5 @@ def test_large_join_is_memory_bounded(join_csvs, tmp_path):
     # A materializing join would hold target + output (~2*ROWS rows) in Python;
     # streaming holds only KVFile (disk) + fetch/insert chunks. Bounded well below
     # what full materialization (~2*ROWS*~400B) would cost.
-    assert joined.peak < max(160.0, ROWS * 400 / 1e6 * 0.5), joined.peak
+    if _MEM_MEANINGFUL:
+        assert joined.peak < max(160.0, ROWS * 400 / 1e6 * 0.5), joined.peak

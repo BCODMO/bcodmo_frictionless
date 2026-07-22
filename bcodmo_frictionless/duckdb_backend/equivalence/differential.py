@@ -83,6 +83,20 @@ def _dataflows_step(step):
         return _df_add_computed_field(
             params.get("fields", []), resources=params.get("resources")
         )
+    if run == "update_package":
+        # standard_flows.update_package = Flow(update_package(**parameters)); the
+        # live primitive drops the 'resources' key and merges the rest package-level.
+        from dataflows import update_package as _df_update_package
+
+        return _df_update_package(**copy.deepcopy(params))
+    if run == "update_resource":
+        # standard_flows.update_resource = update_resource(params['resources'],
+        # **params['metadata']).
+        from dataflows import update_resource as _df_update_resource
+
+        return _df_update_resource(
+            params.get("resources"), **copy.deepcopy(params.get("metadata", {}) or {})
+        )
     if run == "set_types":
         # Bare/standard set_types. Faithful mirror of standard_flows.set_types
         # (built directly from the dataflows `set_type` primitive it wraps, since

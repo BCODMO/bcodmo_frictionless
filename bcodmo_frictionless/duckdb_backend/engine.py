@@ -12,13 +12,18 @@ native ``to_sql`` else UDF-default). Structural processors override ``apply``.
 
 Phase-0 note: input is ingested all-VARCHAR (matching bcodmo load's
 ``cast_strategy=strings``); ``set_types`` casts later. The UDF-default path
-(``udf_map``) is a materialize-map for now; Phase 1 makes it a chunked Arrow UDF.
+(``udf_map``) STREAMS in bounded chunks (cast-in -> process_rows -> format-out ->
+insert), so leaf row processors are never-OOM like load/dump/join/sort.
 """
+
+import itertools
+import os
+from collections import deque
 
 import duckdb
 
 from .processor import REGISTRY
-from .casting import cast_rows, format_out_rows
+from .casting import cast_rows, format_out_iter
 
 
 class ResourceState:
@@ -53,7 +58,18 @@ def run_udf(con, rel, proc, params, schema=None):
 
 
 class Engine:
-    def __init__(self, threads=4, memory_limit=None, temp_directory=None):
+    # Default to SINGLE-THREADED DuckDB. Rationale: a bcodmo pipeline ends in
+    # ``dump_to_s3``, whose ``S3Dumper`` uses a billiard ``Pool`` that ``os.fork()``s.
+    # Forking a multi-threaded process is a classic deadlock trap -- the child can
+    # hang on a lock a parent thread held at fork time. DuckDB's worker-thread pool
+    # (``threads>1``) makes that intermittent hang real (observed in the test suite
+    # when a dump forks after engine work). Single-threaded DuckDB removes those
+    # worker threads, bringing fork-safety to parity with the dataflows lane (which
+    # forks the same dumper with no DuckDB threads). Override via env
+    # ``LAMINAR_DUCKDB_THREADS`` only in environments with no forking dumper.
+    def __init__(self, threads=None, memory_limit=None, temp_directory=None):
+        if threads is None:
+            threads = int(os.environ.get("LAMINAR_DUCKDB_THREADS", "1"))
         self.con = duckdb.connect()
         self.con.execute(f"SET threads TO {threads}")
         if memory_limit:
@@ -65,6 +81,10 @@ class Engine:
         # table while a lazy read streams on the main connection. See _fill_table.
         self._wc = self.con.cursor()
         self.resources: dict[str, ResourceState] = {}
+        # Package-level frictionless descriptor metadata (title/name/custom keys),
+        # as ``update_package`` sets it; folded into the datapackage.json at dump.
+        # Excludes ``resources`` (those come from the per-resource state).
+        self.package_descriptor: dict = {}
         self._seq = 0
 
     # -- helpers used by Processor.apply ------------------------------------
@@ -99,18 +119,25 @@ class Engine:
         ``rows`` (dicts) into it in bounded batches, assigning ``__rownum__`` by
         enumeration. Returns nothing; only ``batch`` rows are ever held in Python.
 
-        One multi-row INSERT ... VALUES per batch (a single prepared statement
-        binding batch*ncols params) -- ~18x faster than per-row executemany, and
-        NULL-safe: a ``?`` bound to None becomes SQL NULL.
-
-        Writes run on the dedicated write cursor ``self._wc`` so they don't clobber
-        an in-flight lazy read on the main connection (the structural read-while-
-        write case). The table lands in the shared catalog, visible to self.con."""
+        ``__rownum__`` is assigned by enumeration. See ``_batch_insert`` for the
+        insert mechanics."""
         coldefs = ", ".join([f'"{c}" VARCHAR' for c in cols])
         self._wc.execute(
             f'CREATE OR REPLACE TABLE "{tbl}" ("__rownum__" BIGINT, {coldefs})'
         )
-        ncols = len(cols) + 1
+        param_rows = (
+            [i] + [_s(r.get(c)) for c in cols] for i, r in enumerate(rows)
+        )
+        self._batch_insert(tbl, len(cols) + 1, param_rows, batch)
+
+    def _batch_insert(self, tbl, ncols, param_rows, batch):
+        """Insert an iterable of param-lists (each of length ``ncols``, first value
+        = ``__rownum__``) into ``tbl`` via one multi-row ``INSERT ... VALUES`` per
+        batch -- a single prepared statement binding ``batch*ncols`` params, ~18x
+        faster than per-row executemany and NULL-safe (a ``?`` bound to None becomes
+        SQL NULL). Writes run on the dedicated write cursor ``self._wc`` so they
+        don't clobber an in-flight lazy read on the main connection (the read-while-
+        write case). Only ``batch`` param-lists are ever buffered in Python."""
         row_ph = "(" + ",".join(["?"] * ncols) + ")"
         full_stmt = f'INSERT INTO "{tbl}" VALUES ' + ",".join([row_ph] * batch)
 
@@ -123,10 +150,8 @@ class Engine:
             self._wc.execute(stmt, [v for row in buf for v in row])
 
         buf = []
-        i = 0
-        for r in rows:
-            buf.append([i] + [_s(r.get(c)) for c in cols])
-            i += 1
+        for pr in param_rows:
+            buf.append(pr)
             if len(buf) >= batch:
                 _flush(buf)
                 buf = []
@@ -174,43 +199,89 @@ class Engine:
         (unit tests / the differential harness)."""
         return self.ingest_iter(name, rows, schema, descriptor=descriptor)
 
-    # -- UDF-default path (materialize-map; Phase 1 -> chunked Arrow UDF) ----
-    def udf_map(self, relation, proc, params, schema=None, out_schema=None):
-        cols = [d[0] for d in relation.description]
-        rows = [dict(zip(cols, r)) for r in relation.fetchall()]
-        rownums = [r.pop("__rownum__", i) for i, r in enumerate(rows)]
-        # Cast VARCHAR storage -> typed BEFORE process_rows, so a bcodmo processor
-        # sees the SAME typed values the dataflows lane feeds it (set_types casts
-        # inline there; here the cast is deferred, so we materialize it at the UDF
-        # boundary). Uses the shared casting module = frictionless schema_validator.
-        if schema:
-            rows = list(cast_rows(rows, schema))
-        out = list(proc.process_rows(rows, params, schema))
-        assert len(out) == len(rownums), (
-            f"{proc.name}: UDF-default expects a 1:1 row map "
-            f"({len(rownums)} in, {len(out)} out); use a native to_sql for "
-            f"filtering/expanding processors."
-        )
-        # Serialize typed outputs back to VARCHAR-safe forms that re-cast
-        # identically (temporals via the OUTPUT field's strftime format). Inverse
-        # of the cast-in above; uses the post-step schema for the new field types.
-        if out_schema:
-            out = format_out_rows(out, out_schema)
-        for r, rn in zip(out, rownums):
-            r["__rownum__"] = rn
-        return self._relation_from_rows(out)
+    # -- UDF-default path (STREAMING 1:1 row map) --------------------------
+    def udf_map(self, relation, proc, params, schema=None, out_schema=None, chunk=10000):
+        """Apply a single-resource 1:1 row processor (``process_rows``) to a
+        relation WITHOUT materializing it -- the never-OOM leaf path.
 
-    def _relation_from_rows(self, rows):
-        cols = list(rows[0].keys()) if rows else ["__rownum__"]
-        data_cols = [c for c in cols if c != "__rownum__"]
+        Input rows stream from the relation in bounded chunks (main connection),
+        are cast VARCHAR->typed lazily (so the processor sees the same typed values
+        the dataflows lane feeds it), pass through ``process_rows`` as ONE
+        continuous lazy call (any internal row-order/state therefore spans the whole
+        resource, matching dataflows), are formatted back to VARCHAR-safe storage
+        lazily, and stream into a fresh table (write cursor). Each output row's
+        hidden ``__rownum__`` is carried 1:1 from its input via a small deque
+        (order_effect='keep'). Only ``chunk`` rows are ever in flight.
+
+        The default path is for 1:1 row maps; a filtering/expanding processor must
+        provide a native ``to_sql`` instead. The deque pairing enforces that: a
+        mismatch between input and output counts raises."""
+        v = self.view(relation)
+        cur = self.con.execute(f"SELECT * FROM {v}")
+        in_cols = [d[0] for d in cur.description]
+        rownum_q = deque()
+
+        def _input():
+            while True:
+                batch = cur.fetchmany(chunk)
+                if not batch:
+                    break
+                for r in batch:
+                    d = dict(zip(in_cols, r))
+                    rownum_q.append(d.pop("__rownum__", None))
+                    yield d
+
+        src = cast_rows(_input(), schema) if schema else _input()
+        out = proc.process_rows(src, params, schema)
+        formatted = format_out_iter(out, out_schema) if out_schema else out
+
+        def _with_rownum():
+            for row in formatted:
+                if not rownum_q:
+                    raise AssertionError(
+                        f"{proc.name}: UDF-default produced MORE rows than it "
+                        f"consumed; a filtering/expanding processor needs a native "
+                        f"to_sql."
+                    )
+                r = dict(row)
+                r["__rownum__"] = rownum_q.popleft()
+                yield r
+
+        rel = self._stream_udf_table(_with_rownum(), out_schema, chunk)
+        if rownum_q:
+            raise AssertionError(
+                f"{proc.name}: UDF-default consumed MORE rows than it produced "
+                f"({len(rownum_q)} unmatched); a filtering processor needs a native "
+                f"to_sql."
+            )
+        return rel
+
+    def _stream_udf_table(self, rows, out_schema, chunk):
+        """Stream ``rows`` (each carrying its own ``__rownum__`` + data cols) into a
+        fresh ``_udf*`` table, PRESERVING each row's ``__rownum__`` (unlike
+        ``_fill_table``, which enumerates). Columns come from ``out_schema`` when
+        given (so the table has the right columns even for 0 rows); otherwise they
+        are derived from the first output row (the schemaless unit-test path)."""
+        it = iter(rows)
+        if out_schema is not None:
+            data_cols = [f["name"] for f in out_schema]
+        else:
+            try:
+                first = next(it)
+            except StopIteration:
+                data_cols = []
+            else:
+                data_cols = [c for c in first.keys() if c != "__rownum__"]
+                it = itertools.chain([first], it)
         tbl = f"_udf{self._next()}"
-        coldefs = ", ".join(['"__rownum__" BIGINT'] + [f'"{c}" VARCHAR' for c in data_cols])
-        self.con.execute(f'CREATE OR REPLACE TABLE "{tbl}" ({coldefs})')
-        order = ["__rownum__"] + data_cols
-        self.con.executemany(
-            f'INSERT INTO "{tbl}" VALUES ({", ".join(["?"] * len(order))})',
-            [[r.get(c) if c == "__rownum__" else _s(r.get(c)) for c in order] for r in rows],
+        coldefs = ", ".join(
+            ['"__rownum__" BIGINT'] + [f'"{c}" VARCHAR' for c in data_cols]
         )
+        self._wc.execute(f'CREATE OR REPLACE TABLE "{tbl}" ({coldefs})')
+        param_rows = (
+            [r.get("__rownum__")] + [_s(r.get(c)) for c in data_cols] for r in it
+        )
+        self._batch_insert(tbl, len(data_cols) + 1, param_rows, chunk)
         return self.con.sql(f'SELECT * FROM "{tbl}"')
 
     def _next(self):
