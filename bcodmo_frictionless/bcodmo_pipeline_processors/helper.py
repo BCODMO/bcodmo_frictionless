@@ -34,12 +34,22 @@ def get_redis_progress_parts_key(resource, cache_id):
     return f"{cache_id}-{resource}-parts"
 
 
+def get_redis_progress_join_key(resource, cache_id):
+    # The number of distinct keys built so far while indexing a join on this
+    # resource. Reported while the join is in its (blocking) key-building phase.
+    return f"{cache_id}-{resource}-join"
+
+
 REDIS_PROGRESS_INIT_FLAG = -1
 REDIS_PROGRESS_LOADING_START_FLAG = -2
 REDIS_PROGRESS_LOADING_DONE_FLAG = -3
 REDIS_PROGRESS_SAVING_START_FLAG = -4
 REDIS_PROGRESS_SAVING_DONE_FLAG = -5
 REDIS_PROGRESS_DELETED_FLAG = -6
+# The resource is the source of a join and we're currently building the join's
+# key index (a blocking phase). The number of keys built so far is stored under
+# get_redis_progress_join_key.
+REDIS_PROGRESS_JOINING_FLAG = -7
 
 # 1 week expiration
 REDIS_EXPIRES = 60 * 60 * 24 * 7
