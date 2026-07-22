@@ -15,6 +15,10 @@ required = [
     "xlrd==1.2.0",
     "pytz==2025.2",
     "billiard==4.2.1",
+    # DuckDB execution backend (bcodmo_frictionless.duckdb_backend). Pinned to the
+    # version the byte-identical output tests were built against; the memory/spill
+    # introspection (duckdb_memory(), duckdb_temporary_files()) needs >=1.5.
+    "duckdb==1.5.4",
 ]
 
 
