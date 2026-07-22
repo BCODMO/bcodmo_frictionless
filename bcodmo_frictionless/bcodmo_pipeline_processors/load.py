@@ -162,12 +162,17 @@ def load(_from, parameters):
 
             for r in package:
                 if r.res.name in names:
-                    missing_data_values = r.res.descriptor.get(
-                        "schema",
-                        {},
-                    ).get(
-                        "missingValues",
-                        [],
+                    # A set so the per-cell `value not in missing_data_values`
+                    # membership test in process_resource is O(1) instead of a
+                    # linear scan of the missingValues list for every value.
+                    missing_data_values = set(
+                        r.res.descriptor.get(
+                            "schema",
+                            {},
+                        ).get(
+                            "missingValues",
+                            [],
+                        )
                     )
 
                     yield process_resource(r, missing_data_values)

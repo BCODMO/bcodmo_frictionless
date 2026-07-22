@@ -6,6 +6,18 @@ from dataflows import Flow
 
 
 def process_resource(rows, fields, pattern):
+    # The old field name -> new field name mapping is constant for the whole
+    # resource, so compute the regex substitution once per field instead of
+    # re-running re.sub for every field on every row.
+    rename_map = {
+        field: re.sub(
+            str(pattern["find"]),
+            str(pattern["replace"]),
+            str(field),
+        )
+        for field in fields
+    }
+
     row_counter = 0
     for row in rows:
         row_counter += 1
@@ -14,11 +26,7 @@ def process_resource(rows, fields, pattern):
             for field in fields:
                 if field not in new_row:
                     continue
-                new_field_name = re.sub(
-                    str(pattern["find"]),
-                    str(pattern["replace"]),
-                    str(field),
-                )
+                new_field_name = rename_map[field]
                 if new_field_name is not field and new_field_name in new_row:
                     raise Exception(
                         f"New field name {new_field_name} already exists in row {list(new_row.keys())}"

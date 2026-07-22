@@ -7,19 +7,21 @@ from dataflows import Flow
 from dataflows.helpers.resource_matcher import ResourceMatcher
 
 from bcodmo_frictionless.bcodmo_pipeline_processors.boolean_processor_helper import (
-    get_expression,
-    check_line,
+    get_compiled_boolean,
+    check_line_compiled,
 )
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import get_missing_values
 
 
 def process_resource(rows, fields, missing_values, boolean_statement=None):
-    expression = get_expression(boolean_statement)
+    compiled_expression = get_compiled_boolean(boolean_statement)
     row_counter = 0
     for row in rows:
         row_counter += 1
 
-        line_passed = check_line(expression, row_counter, row, missing_values)
+        line_passed = check_line_compiled(
+            compiled_expression, row_counter, row, missing_values
+        )
         try:
             for field in fields:
                 input_field = field["input_field"]

@@ -4,8 +4,8 @@ from dataflows import Flow
 from dataflows.helpers.resource_matcher import ResourceMatcher
 
 from bcodmo_frictionless.bcodmo_pipeline_processors.boolean_processor_helper import (
-    get_expression,
-    check_line,
+    get_compiled_boolean,
+    check_line_compiled,
 )
 
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import get_missing_values
@@ -41,14 +41,16 @@ def _apply_function(function):
 
 
 def _find_replace(rows, fields, missing_values, boolean_statement=None):
-    expression = get_expression(boolean_statement)
+    compiled_expression = get_compiled_boolean(boolean_statement)
 
     row_counter = 0
     for row in rows:
         row_counter += 1
         new_row = dict((k, v) for k, v in row.items())
 
-        line_passed = check_line(expression, row_counter, new_row, missing_values)
+        line_passed = check_line_compiled(
+            compiled_expression, row_counter, new_row, missing_values
+        )
         if line_passed:
             for field in fields:
                 for pattern in field.get("patterns", []):

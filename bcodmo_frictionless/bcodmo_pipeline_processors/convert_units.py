@@ -20,6 +20,9 @@ def process_resource(
     missing_values,
 ):
     schema = rows.res.descriptor["schema"]
+    # Resolve each field name to its schema field once, rather than scanning the
+    # full schema field list for every field on every row.
+    schema_lookup = {f["name"]: f for f in schema.get("fields", [])}
 
     row_counter = 0
     for row in rows:
@@ -27,11 +30,7 @@ def process_resource(
 
         try:
             for field in fields:
-                cur_schema_field = {}
-                for schema_field in schema.get("fields", []):
-                    if schema_field["name"] == field["name"]:
-                        cur_schema_field = schema_field
-                        break
+                cur_schema_field = schema_lookup.get(field["name"], {})
                 # Check if the type in the datapackage is a number
                 if cur_schema_field["type"] == "number":
                     orig_val = row[field["name"]]

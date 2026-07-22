@@ -9,19 +9,21 @@ from dataflows.helpers.resource_matcher import ResourceMatcher
 
 
 from bcodmo_frictionless.bcodmo_pipeline_processors.boolean_processor_helper import (
-    get_expression,
-    check_line,
+    get_compiled_boolean,
+    check_line_compiled,
 )
 
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import get_missing_values
 
 
 def _boolean_filter_rows(rows, missing_values, boolean_statement):
-    expression = get_expression(boolean_statement)
+    compiled_expression = get_compiled_boolean(boolean_statement)
     row_counter = 0
     for row in rows:
         row_counter += 1
-        line_passed = check_line(expression, row_counter, row, missing_values)
+        line_passed = check_line_compiled(
+            compiled_expression, row_counter, row, missing_values
+        )
         if line_passed:
             yield row
 

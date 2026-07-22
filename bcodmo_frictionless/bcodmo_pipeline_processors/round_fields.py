@@ -6,8 +6,8 @@ from dataflows import Flow
 from dataflows.helpers.resource_matcher import ResourceMatcher
 
 from bcodmo_frictionless.bcodmo_pipeline_processors.boolean_processor_helper import (
-    get_expression,
-    check_line,
+    get_compiled_boolean,
+    check_line_compiled,
 )
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import get_missing_values
 
@@ -18,22 +18,23 @@ def remove_trailing_zeros(f):
 
 
 def process_resource(rows, fields, missing_values, boolean_statement=None):
-    expression = get_expression(boolean_statement)
+    compiled_expression = get_compiled_boolean(boolean_statement)
     schema = rows.res.descriptor["schema"]
+    # Resolve each field name to its schema field once, rather than scanning the
+    # full schema field list for every field on every row.
+    schema_lookup = {f["name"]: f for f in schema.get("fields", [])}
 
     row_counter = 0
     for row in rows:
         row_counter += 1
 
-        line_passed = check_line(expression, row_counter, row, missing_values)
+        line_passed = check_line_compiled(
+            compiled_expression, row_counter, row, missing_values
+        )
         if line_passed:
             try:
                 for field in fields:
-                    cur_schema_field = {}
-                    for schema_field in schema.get("fields", []):
-                        if schema_field["name"] == field["name"]:
-                            cur_schema_field = schema_field
-                            break
+                    cur_schema_field = schema_lookup.get(field["name"], {})
                     # Check if the type in the datapackage is a number
                     if cur_schema_field["type"] == "number" or (
                         cur_schema_field["type"] == "integer"

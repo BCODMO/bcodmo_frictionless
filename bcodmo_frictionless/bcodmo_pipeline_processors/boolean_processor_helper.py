@@ -527,3 +527,23 @@ def check_line(expression, row_counter, row, missing_data_values, parser=parse_b
             sys.exc_info()[2]
         )
     return False
+
+
+def check_line_compiled(compiled_expression, row_counter, row, missing_data_values):
+    """
+    Drop-in replacement for check_line that takes a pre-compiled boolean closure
+    (from get_compiled_boolean) instead of re-walking a pyparsing tree every row.
+
+    Semantics match check_line exactly: a missing expression (None) passes, and
+    any error raised while evaluating is re-raised annotated with the row number.
+    Callers should compile the boolean_statement once at setup with
+    get_compiled_boolean and then call this per row.
+    """
+    if compiled_expression is None:
+        return True
+    try:
+        return compiled_expression(row_counter, row, missing_data_values)
+    except Exception as e:
+        raise type(e)(str(e) + f" at row {row_counter}").with_traceback(
+            sys.exc_info()[2]
+        )
