@@ -253,27 +253,35 @@ def join_aux(source_name, source_key, source_delete,  # noqa: C901
         num_keys = 0
         redis_conn = get_redis_connection() if cache_id else None
         join_key = None
+        # Report join progress under its OWN synthetic progress entry rather than
+        # the source resource's real -progress key. When source.delete is False
+        # the source rows stream straight into the dump, which writes row-count
+        # progress to the source's real key ~every 0.75s and would clobber our
+        # -7 flag almost immediately. This dedicated name is never written by the
+        # dump, so the join's flag + key count survive for the whole build.
+        progress_name = f"{source_name} (join)"
+        progress_key = get_redis_progress_key(progress_name, cache_id)
         print(
             f"[BCODMO JOIN] indexer start: source={source_name!r} "
-            f"cache_id={cache_id!r} "
+            f"progress_name={progress_name!r} cache_id={cache_id!r} "
             f"redis_progress_url={'set' if os.environ.get('REDIS_PROGRESS_URL') else 'MISSING'} "
             f"redis_conn={'yes' if redis_conn is not None else 'None'}",
             flush=True,
         )
         if redis_conn is not None:
             resource_set_key = get_redis_progress_resource_key(cache_id)
-            redis_conn.sadd(resource_set_key, source_name)
+            redis_conn.sadd(resource_set_key, progress_name)
             redis_conn.expire(resource_set_key, REDIS_EXPIRES)
             redis_conn.set(
-                get_redis_progress_key(source_name, cache_id),
+                progress_key,
                 REDIS_PROGRESS_JOINING_FLAG,
                 ex=REDIS_EXPIRES,
             )
-            join_key = get_redis_progress_join_key(source_name, cache_id)
+            join_key = get_redis_progress_join_key(progress_name, cache_id)
             redis_conn.set(join_key, num_keys, ex=REDIS_EXPIRES)
             print(
                 f"[BCODMO JOIN] wrote initial progress: resource_set_key={resource_set_key!r} "
-                f"progress_key={get_redis_progress_key(source_name, cache_id)!r}(={REDIS_PROGRESS_JOINING_FLAG}) "
+                f"progress_key={progress_key!r}(={REDIS_PROGRESS_JOINING_FLAG}) "
                 f"join_key={join_key!r}(=0)",
                 flush=True,
             )
@@ -312,9 +320,18 @@ def join_aux(source_name, source_key, source_delete,  # noqa: C901
                 timer = time.time()
             yield row
         if redis_conn is not None:
-            redis_conn.set(join_key, num_keys, ex=REDIS_EXPIRES)
+            # Index fully built: clear the synthetic "building" entry so its badge
+            # doesn't linger for the rest of the run. While the build is in
+            # progress the entry stays put (with a frozen count if the join ever
+            # genuinely stalls, which is the signal we want). run.py's end-of-run
+            # cleanup is a backstop. The source resource reports its own dump
+            # progress separately under its real key.
+            redis_conn.delete(progress_key)
+            redis_conn.delete(join_key)
+            redis_conn.srem(get_redis_progress_resource_key(cache_id), progress_name)
         print(
             f"[BCODMO JOIN] indexer done: source={source_name!r} "
+            f"progress_name={progress_name!r} "
             f"total_keys={num_keys} redis_conn={'yes' if redis_conn is not None else 'None'}",
             flush=True,
         )
