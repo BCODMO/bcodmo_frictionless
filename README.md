@@ -1,5 +1,10 @@
 # bcodmo_frictionless
 
+TODO speedups
+- don't run hidden dump_to_s3 if the last step is dump_to_s3
+- add ability to duplicate to multiple new resource names
+- 
+
 
 Custom dataflows processors and goodtables checks for BCO-DMO.
 
