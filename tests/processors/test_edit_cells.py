@@ -20,11 +20,69 @@ data = [
 def test_edit_cells():
     flows = [
         data,
+        edit_cells(
+            {"edited": [{"row": 1, "cells": [{"field": "col1", "value": "hello"}]}]}
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert rows[0][0]["col1"] == "hello"
+    assert rows[0][1]["col1"] == "heresabc"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_edit_cells_multiple_rows_and_cells():
+    flows = [
+        data,
+        edit_cells(
+            {
+                "edited": [
+                    {
+                        "row": 3,
+                        "cells": [
+                            {"field": "col1", "value": "row3col1"},
+                            {"field": "col2", "value": "row3col2"},
+                        ],
+                    },
+                    {"row": 1, "cells": [{"field": "col1", "value": "row1col1"}]},
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert rows[0][0]["col1"] == "row1col1"
+    assert rows[0][2]["col1"] == "row3col1"
+    assert rows[0][2]["col2"] == "row3col2"
+    # Untouched row is unchanged
+    assert rows[0][1]["col1"] == "heresabc"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_edit_cells_legacy_dict_migration():
+    # The legacy dict shape (keyed by row number) is still accepted and migrated
+    # to the list shape internally.
+    flows = [
+        data,
         edit_cells({"edited": {1: [{"field": "col1", "value": "hello"}]}}),
     ]
     rows, datapackage, _ = Flow(*flows).results()
     assert rows[0][0]["col1"] == "hello"
     assert rows[0][1]["col1"] == "heresabc"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_edit_cells_list_unused():
+    flows = [
+        data,
+        edit_cells(
+            {"edited": [{"row": 5, "cells": [{"field": "col1", "value": "hello"}]}]}
+        ),
+    ]
+    try:
+        rows, datapackage, _ = Flow(*flows).results()
+        # We shouldn't get here, it should error
+        assert False == True
+    except:
+        pass
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
@@ -40,7 +98,7 @@ def test_edit_cells_number_fail():
                 }
             }
         ),
-        edit_cells({"edited": {3: [{"field": "col3", "value": "hello"}]}}),
+        edit_cells({"edited": [{"row": 3, "cells": [{"field": "col3", "value": "hello"}]}]}),
     ]
     try:
         rows, datapackage, _ = Flow(*flows).results()
@@ -63,7 +121,7 @@ def test_edit_cells_number():
                 }
             }
         ),
-        edit_cells({"edited": {3: [{"field": "col3", "value": "3"}]}}),
+        edit_cells({"edited": [{"row": 3, "cells": [{"field": "col3", "value": "3"}]}]}),
     ]
     rows, datapackage, _ = Flow(*flows).results()
     assert rows[0][2]["col3"] == 3
@@ -83,7 +141,7 @@ def test_edit_cells_date_fail():
                 }
             }
         ),
-        edit_cells({"edited": {1: [{"field": "col2", "value": "hello"}]}}),
+        edit_cells({"edited": [{"row": 1, "cells": [{"field": "col2", "value": "hello"}]}]}),
     ]
     try:
         rows, datapackage, _ = Flow(*flows).results()
@@ -108,7 +166,7 @@ def test_edit_cells_date():
             }
         ),
         edit_cells(
-            {"edited": {1: [{"field": "col2", "value": "2014-02-13T10:24:09Z"}]}}
+            {"edited": [{"row": 1, "cells": [{"field": "col2", "value": "2014-02-13T10:24:09Z"}]}]}
         ),
     ]
     rows, datapackage, _ = Flow(*flows).results()
@@ -119,7 +177,7 @@ def test_edit_cells_date():
 def test_edit_cells_unused():
     flows = [
         data,
-        edit_cells({"edited": {5: [{"field": "col1", "value": "hello"}]}}),
+        edit_cells({"edited": [{"row": 5, "cells": [{"field": "col1", "value": "hello"}]}]}),
     ]
     try:
         rows, datapackage, _ = Flow(*flows).results()
@@ -133,7 +191,7 @@ def test_edit_cells_unused():
 def test_edit_cells_nonexistent_field():
     flows = [
         data,
-        edit_cells({"edited": {1: [{"field": "nonexistent", "value": "hello"}]}}),
+        edit_cells({"edited": [{"row": 1, "cells": [{"field": "nonexistent", "value": "hello"}]}]}),
     ]
     with pytest.raises(Exception, match="not found"):
         Flow(*flows).results()

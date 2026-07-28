@@ -1,10 +1,10 @@
 # bcodmo_frictionless
 
 TODO speedups
+
 - don't run hidden dump_to_s3 if the last step is dump_to_s3
 - add ability to duplicate to multiple new resource names
-- 
-
+-
 
 Custom dataflows processors and goodtables checks for BCO-DMO.
 
@@ -287,8 +287,10 @@ Edits specific cells by row number.
 **Parameters:**
 
 - `resources` - list of resources to operate on
-- `edited` - object mapping row numbers to edits
-  - Each value is a list of `{field, value}` objects
+- `edited` - ordered list of row edits
+  - Each item is a `{row, cells}` object, where `row` is the 1-based row number and `cells` is a list of `{field, value}` objects
+  - A list is used so the order the edits were entered in is preserved
+  - A legacy object mapping row numbers to cell lists is still accepted and migrated automatically
 
 ---
 
