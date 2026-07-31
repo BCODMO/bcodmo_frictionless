@@ -619,6 +619,9 @@ def test_load_regex_csv():
                 "delimiter": r"\s+",
                 "infer_strategy": "strings",
                 "cast_strategy": "strings",
+                # The \s+ regex split yields a trailing blank-header column;
+                # default ignore_blank_headers=False now keeps it, so drop it.
+                "ignore_blank_headers": True,
             }
         )
     ]
@@ -662,6 +665,9 @@ def test_load_regex_csv_capture_skipped_rows():
                     {"column_name": "test1", "regex": r"\*\* (.*)"}
                 ],
                 "capture_skipped_rows_join": True,
+                # The \s+ regex split yields a trailing blank-header column;
+                # default ignore_blank_headers=False now keeps it, so drop it.
+                "ignore_blank_headers": True,
             }
         )
     ]

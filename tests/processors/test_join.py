@@ -26,13 +26,19 @@ def test_join():
         data2,
         data1,
         join(
-            "res_1",
-            "{#}",
-            "res_2",
-            "{#}",
-            fields={"col2": {"name": "col2"}},
-            source_delete=True,
-            mode="half-outer",
+            {
+                "source": {
+                    "name": "res_1",
+                    "key": "{#}",
+                    "delete": True,
+                },
+                "target": {
+                    "name": "res_2",
+                    "key": "{#}",
+                },
+                "fields": {"col2": {"name": "col2"}},
+                "mode": "half-outer",
+            }
         ),
     ]
     rows, datapackage, _ = Flow(*flows).results()
@@ -40,19 +46,3 @@ def test_join():
     assert rows == [
         [{"col1": 1, "col2": 1}, {"col1": 2, "col2": 2}, {"col1": 3, "col2": 3}]
     ]
-
-"""
-        join({
-            "source": {
-                "name": "res_1",
-                "key": "{#}",
-                "delete": True,
-            },
-            "target": {
-                "name": "res_2",
-                "key": "{#}",
-            },
-            "fields": {"col2": {"name": "col2"}},
-            "mode": "half-outer",
-        }),
-"""

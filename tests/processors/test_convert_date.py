@@ -572,6 +572,10 @@ def test_utc_time_convert():
                 "cast_strategy": "strings",
                 "headers": 10,
                 "preserve_formatting": True,
+                # This sheet has trailing empty phantom columns; the default
+                # (ignore_blank_headers=False) now keeps them, so drop the
+                # known-empty ones explicitly.
+                "ignore_blank_headers": True,
             }
         ),
         convert_date(
