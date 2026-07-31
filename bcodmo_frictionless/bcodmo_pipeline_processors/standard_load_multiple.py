@@ -174,7 +174,7 @@ class standard_load_multiple(standard_load):
                 self.options.setdefault("custom_parsers", {}).setdefault(
                     "sql", ExtendedSQLParser
                 )
-                self.options.setdefault("ignore_blank_headers", True)
+                self.options.setdefault("ignore_blank_headers", False)
                 self.options.setdefault("headers", 1)
 
                 """ Change to add preloaded data """
