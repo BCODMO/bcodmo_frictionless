@@ -155,7 +155,7 @@ def fix_fields(fields):
         if 'name' not in spec:
             spec['name'] = field
         if 'aggregate' not in spec:
-            spec['aggregate'] = 'any'
+            spec['aggregate'] = 'first'
     return fields
 
 
@@ -427,7 +427,7 @@ def join_aux(source_name, source_key, source_delete,  # noqa: C901
     return func
 
 
-def join(source_name, source_key, target_name, target_key, fields={}, full=None, mode='half-outer', source_delete=True, cache_id=None):
+def join(source_name, source_key, target_name, target_key, fields={}, full=None, mode='full-outer', source_delete=True, cache_id=None):
     return join_aux(source_name, source_key, source_delete, target_name, target_key, fields, full, mode, cache_id=cache_id)
 
 
@@ -443,7 +443,7 @@ def flow(parameters):
             target["key"],
             parameters.get("fields", {}),
             parameters.get("full", None),
-            parameters.get("mode", "half-outer"),
+            parameters.get("mode", "full-outer"),
             source.get("delete", False),
             cache_id=parameters.get("cache_id"),
         ),

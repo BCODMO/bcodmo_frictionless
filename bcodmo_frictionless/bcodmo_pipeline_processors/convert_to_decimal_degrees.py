@@ -208,7 +208,7 @@ def convert_to_decimal_degrees(fields, resources=None, boolean_statement=None):
                     }
                     
                     # Handle metadata preservation
-                    if field_config.get("preserve_metadata", False) and input_field and input_field in package_fields_lookup:
+                    if field_config.get("preserve_metadata", True) and input_field and input_field in package_fields_lookup:
                         orig_field = package_fields_lookup[input_field]
                         # Transfer bcodmo: metadata if it exists
                         if "bcodmo:" in orig_field:

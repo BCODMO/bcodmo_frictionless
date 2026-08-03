@@ -582,6 +582,49 @@ def test_load_xlsx_scientific_notation():
     assert str(rows[0][0]["scientific_notation"]) == "4.273E-07"
 
 
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_xlsx_preserve_formatting_defaults_true():
+    # Excel loads default preserve_formatting to True, so a formatted cell keeps
+    # its spreadsheet-displayed value even when the option is not passed.
+    def load_sci(params):
+        base = {
+            "from": "data/test_scientific_notation.xlsx",
+            "name": "res",
+            "format": "xlsx",
+            "sheet": 1,
+            "infer_strategy": "strings",
+            "cast_strategy": "strings",
+        }
+        base.update(params)
+        rows, _, _ = Flow(load(base)).results()
+        return str(rows[0][0]["scientific_notation"])
+
+    # Not passed -> defaults to True -> displayed value.
+    assert load_sci({}) == "4.273E-07"
+    # Explicitly True -> displayed value.
+    assert load_sci({"preserve_formatting": True}) == "4.273E-07"
+    # Explicitly False still overrides the default -> raw value.
+    assert load_sci({"preserve_formatting": False}) == "4.27335427525861e-07"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_is_excel_load_gating():
+    from bcodmo_frictionless.bcodmo_pipeline_processors.load import _is_excel_load
+
+    # Explicit Excel formats.
+    assert _is_excel_load("data/x.csv", "xlsx") is True
+    assert _is_excel_load("data/x.csv", "xls") is True
+    # Any other explicit format is never Excel, regardless of extension.
+    assert _is_excel_load("data/x.xlsx", "csv") is False
+    assert _is_excel_load("data/x.xlsx", "bcodmo-fixedwidth") is False
+    # Format omitted -> infer from source extension (single or list).
+    assert _is_excel_load("data/x.xlsx", None) is True
+    assert _is_excel_load("s3://b/o.XLS", None) is True
+    assert _is_excel_load(["data/a.csv", "data/b.xlsx"], None) is True
+    assert _is_excel_load("data/x.csv", None) is False
+    assert _is_excel_load(["data/a.csv", "data/b.tsv"], None) is False
+
+
 @mock_aws
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_load_s3_path_xlsx_regex_object_spaces():

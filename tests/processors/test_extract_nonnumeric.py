@@ -114,3 +114,48 @@ def test_extract_nonnumeric_nonexistent_field():
     ]
     with pytest.raises(Exception, match="not found"):
         Flow(*flows).results()
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_extract_nonnumeric_default_suffix():
+    # suffix defaults to "_flag" (aligned with the laminar_web frontend default)
+    flows = [
+        data,
+        extract_nonnumeric({"fields": ["col1"]}),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    assert rows[0][2]["col1"] == None
+    assert rows[0][2]["col1_flag"] == "this is a string"
+
+    fields = datapackage.resources[0].schema.fields
+    assert fields[1].name == "col1_flag"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_extract_nonnumeric_preserve_metadata_default():
+    # preserve_metadata defaults to True (aligned with the frontend default)
+    flows = [
+        data,
+        update_fields({
+            "fields": {
+                "col1": {
+                    "bcodmo:": {
+                        "units": "mixed",
+                        "description": "Numeric field with occasional text comments"
+                    }
+                }
+            }
+        }),
+        extract_nonnumeric({"fields": ["col1"]}),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+
+    comment_field = None
+    for field in datapackage.resources[0].schema.fields:
+        if field.name == "col1_flag":
+            comment_field = field
+            break
+
+    assert comment_field is not None
+    assert "bcodmo:" in comment_field.descriptor
+    assert comment_field.descriptor["bcodmo:"]["units"] == "mixed"

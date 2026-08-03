@@ -169,3 +169,45 @@ def test_convert_to_decimal_degrees_nonexistent_field():
     ]
     with pytest.raises(Exception, match="not found"):
         Flow(*flows).results()
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_convert_to_decimal_degrees_preserve_metadata_default():
+    # preserve_metadata defaults to True (aligned with the laminar_web frontend default)
+    flows = [
+        data_1,
+        update_fields({
+            "fields": {
+                "latitude": {
+                    "bcodmo:": {
+                        "units": "degrees_decimal_minutes",
+                        "description": "Latitude in DDM format",
+                    }
+                }
+            }
+        }),
+        convert_to_decimal_degrees(
+            {
+                "fields": [
+                    {
+                        "format": "degrees-decimal_minutes",
+                        "input_field": "latitude",
+                        "output_field": "latitude_dd",
+                        "pattern": "(?P<degrees>\d+)° (?P<decimal_minutes>\d+\.*\d*)' (?P<directional>\w).*",
+                        "directional": "",
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+
+    latitude_dd_field = None
+    for field in datapackage.resources[0].schema.fields:
+        if field.name == "latitude_dd":
+            latitude_dd_field = field
+            break
+
+    assert latitude_dd_field is not None
+    assert "bcodmo:" in latitude_dd_field.descriptor
+    assert latitude_dd_field.descriptor["bcodmo:"]["units"] == "degrees_decimal_minutes"

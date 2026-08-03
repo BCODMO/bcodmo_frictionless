@@ -408,7 +408,7 @@ def convert_date(fields, resources=None, boolean_statement=None):
                         }
 
                     # Handle metadata preservation
-                    if field_config.get("preserve_metadata", False):
+                    if field_config.get("preserve_metadata", True):
                         # Find the original field to get metadata from
                         original_field_name = None
                         if "input_field" in field_config:

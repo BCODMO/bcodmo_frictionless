@@ -122,7 +122,7 @@ def split_column(fields, delete_input=False, resources=None, boolean_statement=N
                 for field_config in fields:
                     input_field = field_config.get("input_field")
                     field_output_fields = field_config.get("output_fields", [])
-                    preserve_metadata = field_config.get("preserve_metadata", False)
+                    preserve_metadata = field_config.get("preserve_metadata", True)
                     
                     for output_field in field_output_fields:
                         # Create base field definition

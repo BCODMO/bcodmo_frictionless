@@ -48,6 +48,6 @@ def set_types(parameters, resources=None, regex=None, types={}):
 
 def flow(parameters):
     resources = parameters.get("resources", None)
-    regex = parameters.get("regex", True)
+    regex = parameters.get("regex", False)
     types = parameters.get("types", {})
     return Flow(set_types(parameters, resources=resources, regex=regex, types=types))

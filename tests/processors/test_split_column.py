@@ -220,3 +220,43 @@ def test_split_column_nonexistent_field():
     ]
     with pytest.raises(Exception, match="not found"):
         Flow(*flows).results()
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_split_column_preserve_metadata_default():
+    # preserve_metadata defaults to True (aligned with the laminar_web frontend default)
+    flows = [
+        data,
+        update_fields({
+            "fields": {
+                "col1": {
+                    "bcodmo:": {
+                        "units": "string",
+                        "description": "Original combined field",
+                    }
+                }
+            }
+        }),
+        split_column(
+            {
+                "fields": [
+                    {
+                        "input_field": "col1",
+                        "pattern": "(.*) (.*)",
+                        "output_fields": ["f1", "f2"],
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+
+    f1_field = None
+    for field in datapackage.resources[0].schema.fields:
+        if field.name == "f1":
+            f1_field = field
+            break
+
+    assert f1_field is not None
+    assert "bcodmo:" in f1_field.descriptor
+    assert f1_field.descriptor["bcodmo:"]["units"] == "string"

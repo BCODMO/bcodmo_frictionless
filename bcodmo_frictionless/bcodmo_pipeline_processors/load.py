@@ -80,6 +80,21 @@ def clean_resource_name(name):
     return re.sub("[^-a-z0-9._]", "", re.sub(r"\s+", "_", name.lower()))
 
 
+def _is_excel_load(_from, fmt):
+    """Whether this load reads an Excel workbook, by explicit format or, when
+    format is omitted (tabulator infers it), by the source file extension."""
+    if fmt in ("xlsx", "xls"):
+        return True
+    if fmt:
+        return False
+    sources = _from if isinstance(_from, (list, tuple)) else [_from]
+    return any(
+        str(s).lower().split("?")[0].rstrip("/").endswith((".xlsx", ".xls"))
+        for s in sources
+        if s is not None
+    )
+
+
 def load(_from, parameters):
     _input_separator = parameters.pop("input_separator", ",")
     _remove_empty_rows = parameters.pop("remove_empty_rows", True)
@@ -91,6 +106,14 @@ def load(_from, parameters):
 
     if _recursion_limit:
         sys.setrecursionlimit(_recursion_limit)
+
+    # Excel loads default preserve_formatting to True so that numbers and dates
+    # render the way a spreadsheet reader displays them (matching the file
+    # preview) instead of tabulator's raw values. Callers can still override by
+    # passing preserve_formatting explicitly. Gated to Excel because the option
+    # is unsupported for other formats/schemes and would emit a warning.
+    if _is_excel_load(_from, parameters.get("format")):
+        parameters.setdefault("preserve_formatting", True)
 
     if parameters.get("format") == "bcodmo-fixedwidth":
         # With fixed width files, we want to also send the sample_size

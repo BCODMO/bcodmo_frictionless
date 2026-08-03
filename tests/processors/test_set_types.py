@@ -122,3 +122,22 @@ def test_set_types_nonexistent_field():
     ]
     with pytest.raises(Exception, match="did not match any fields"):
         Flow(*flows).results()
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_set_types_regex_default_is_literal():
+    # regex defaults to False (aligned with the frontend): field names are matched
+    # literally, so a name containing regex metacharacters like "(m)" matches the
+    # actual field rather than being interpreted as a pattern (which would raise).
+    data = [
+        {"depth (m)": "5", "col2": "world"},
+    ]
+    flows = [
+        data,
+        set_types({"types": {"depth (m)": {"type": "number"}}}),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    fields = datapackage.resources[0].schema.fields
+    assert fields[0].name == "depth (m)"
+    assert fields[0].type == "number"
+    assert rows[0][0]["depth (m)"] == Decimal("5")

@@ -628,3 +628,46 @@ def test_convert_date_nonexistent_field():
     ]
     with pytest.raises(Exception, match="not found"):
         Flow(*flows).results()
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_convert_date_preserve_metadata_default():
+    # preserve_metadata defaults to True (aligned with the laminar_web frontend default)
+    flows = [
+        data_10,
+        update_fields(
+            {
+                "fields": {
+                    "col1": {
+                        "bcodmo:": {
+                            "units": "datetime",
+                            "description": "Original datetime field with metadata",
+                        }
+                    }
+                }
+            }
+        ),
+        convert_date(
+            {
+                "fields": [
+                    {
+                        "inputs": [{"field": "col1", "format": "%m/%d/%Y %H:%M:%S"}],
+                        "output_field": "datetime_field",
+                        "output_format": "%Y-%m-%dT%H:%M:%SZ",
+                        "output_type": "datetime",
+                    }
+                ]
+            }
+        ),
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+
+    datetime_field = None
+    for field in datapackage.resources[0].schema.fields:
+        if field.name == "datetime_field":
+            datetime_field = field
+            break
+
+    assert datetime_field is not None
+    assert "bcodmo:" in datetime_field.descriptor
+    assert datetime_field.descriptor["bcodmo:"]["units"] == "datetime"

@@ -57,7 +57,7 @@ def process_resource(rows, fields, missing_values, suffix=None, boolean_statemen
             )
 
 
-def extract_nonnumeric(fields, resources=None, suffix="_", boolean_statement=None, preserve_metadata=False):
+def extract_nonnumeric(fields, resources=None, suffix="_flag", boolean_statement=None, preserve_metadata=True):
     def func(package):
         matcher = ResourceMatcher(resources, package.pkg)
         for resource in package.pkg.descriptor["resources"]:
@@ -130,8 +130,8 @@ def flow(parameters):
         extract_nonnumeric(
             parameters.get("fields", []),
             resources=parameters.get("resources"),
-            suffix=parameters.get("suffix", "_"),
+            suffix=parameters.get("suffix", "_flag"),
             boolean_statement=parameters.get("boolean_statement"),
-            preserve_metadata=parameters.get("preserve_metadata", False),
+            preserve_metadata=parameters.get("preserve_metadata", True),
         )
     )
