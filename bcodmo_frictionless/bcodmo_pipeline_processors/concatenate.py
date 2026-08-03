@@ -24,7 +24,7 @@ def concatenator(resources, all_target_fields, field_mapping, include_source_nam
         if "dpp:streamedFrom" not in resource_.res._Resource__current_descriptor:
             path_name = None
             file_name = None
-            logging.warn(
+            logging.warning(
                 "Concatenating a resource with no dpp:streamedFrom so the path name will be empty"
             )
         else:

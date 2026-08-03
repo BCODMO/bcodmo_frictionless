@@ -61,6 +61,14 @@ class standard_load_multiple(standard_load):
     def process_datapackage(self, dp: Package):
         results = {}
 
+        # loader_cache_id / loader_resource_name are only consumed by the
+        # bcodmo-aws loader (for redis progress tracking). Passing them to any
+        # other tabulator loader (e.g. the built-in file/s3 loaders) leaves them
+        # as leftover options and triggers an "unsupported option(s)" UserWarning.
+        is_bcodmo_aws = self.options.get("scheme", None) == "bcodmo-aws"
+        if not is_bcodmo_aws:
+            self.options.pop("loader_cache_id", None)
+
         # Only do preloaded data for bcodmo-aws loader
         # Skip preloading when limit_rows is active so that _limit_rows can be
         # applied at the Stream level, avoiding downloading entire files
@@ -98,7 +106,8 @@ class standard_load_multiple(standard_load):
             # Set the proper variables for this individual resource
 
             self._set_individual(i)
-            self.options["loader_resource_name"] = self.names[i]
+            if is_bcodmo_aws:
+                self.options["loader_resource_name"] = self.names[i]
 
             if load_source in results:
                 chars_s = results[load_source]["data"]

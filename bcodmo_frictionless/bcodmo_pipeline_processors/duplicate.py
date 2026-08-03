@@ -36,6 +36,16 @@ def _unlink_quietly(path):
         pass
 
 
+def _cleanup_quietly(writer, path):
+    # Finalizer helper: close the still-open writer (so an abandoned buffer
+    # doesn't leak the handle and emit a ResourceWarning) and remove the file.
+    try:
+        writer.close()
+    except Exception:
+        pass
+    _unlink_quietly(path)
+
+
 class RowFileBuffer:
     """Buffers every row of the source resource on local disk so it can be
     replayed as the duplicate copy.
@@ -74,9 +84,12 @@ class RowFileBuffer:
         self._can_fallocate = True
         self._closed = False
         # Backstop: if the buffer is abandoned (pipeline error, early GC) without
-        # a clean close(), still remove the temp file. Bound to `path` only - not
-        # `self` - so it doesn't keep the buffer alive.
-        self._finalizer = weakref.finalize(self, _unlink_quietly, self.path)
+        # a clean close(), still close the writer and remove the temp file. Bound
+        # to the writer and `path` - not `self` - so it doesn't keep the buffer
+        # alive (the file object holds no reference back to this RowFileBuffer).
+        self._finalizer = weakref.finalize(
+            self, _cleanup_quietly, self._writer, self.path
+        )
         # Reserve the first chunk now so an already-full disk fails fast, before
         # we stream any rows.
         self._reserve(RESERVE_CHUNK_SIZE)

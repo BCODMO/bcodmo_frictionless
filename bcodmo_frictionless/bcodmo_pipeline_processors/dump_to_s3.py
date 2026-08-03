@@ -173,7 +173,7 @@ class S3Dumper(DumperBase):
             )
 
         else:
-            logging.warn("Using base boto credentials for S3 Dumper")
+            logging.warning("Using base boto credentials for S3 Dumper")
             self.s3 = boto3.resource("s3")
             self.s3_client = boto3.client("s3")
         if self.delete:
@@ -355,7 +355,7 @@ class S3Dumper(DumperBase):
                 )
                 self.datapackage.commit()
             except Exception as e:
-                logging.warn(
+                logging.warning(
                     f"Failed to save the pipeline-spec.yaml: {str(e)}",
                 )
 
