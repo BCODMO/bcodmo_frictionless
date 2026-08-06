@@ -11,7 +11,8 @@ from dataflows import Flow, PackageWrapper, update_resource
 from dataflows.helpers.resource_matcher import ResourceMatcher
 
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
-    KVFileBuildProgress,
+    BlockingStepProgress,
+    REDIS_PROGRESS_DRAINING_FLAG,
 )
 
 
@@ -233,56 +234,88 @@ def join_aux(source_name, source_key, source_delete,  # noqa: C901
         mode = 'half-outer' if full else 'inner'
     assert mode in ['inner', 'half-outer', 'full-outer']
 
+    # The index build and the dedup/full-outer scans that follow it are all
+    # blocking phases of the same join, and share one progress entry. Created
+    # lazily so building the flow doesn't register a badge for a join that
+    # hasn't started running yet.
+    progress_holder = {}
+
+    def get_progress():
+        if 'progress' not in progress_holder:
+            progress_holder['progress'] = BlockingStepProgress(
+                cache_id, source_name, 'join')
+        return progress_holder['progress']
+
     # Indexes the source data
-    def indexer(resource):
+    def indexer(resource, finish=True):
         # Building the index for a join is a blocking step: the entire source
         # resource is drained into the KVFile before any target rows can flow
         # downstream. While that happens no other processor reports progress, so
-        # we publish the number of distinct keys built so far to redis. The front
-        # end reads this to show the join "building up" (and that it's alive).
-        num_keys = 0
-        progress = KVFileBuildProgress(cache_id, source_name, "join")
-        for row_number, row in enumerate(resource, start=1):
-            key = source_key(row, row_number)
-            try:
-                current = db.get(key)
-            except KeyError:
-                current = {}
-                num_keys += 1
-            for field, spec in fields.items():
-                name = spec['name']
-                curr = current.get(field)
-                agg = spec['aggregate']
-                if agg != 'count':
-                    new = row.get(name)
-                else:
-                    new = ''
-                if new is not None:
-                    current[field] = AGGREGATORS[agg].func(curr, new)
-                elif field not in current:
-                    current[field] = None
-            if mode == 'full-outer':
-                current['__key__'] = [row.get(field) for field in source_key.key_list]
-            db.set(key, current)
-            db_keys_usage.set(key, False)
-            progress.update(num_keys)
-            yield row
-        progress.finish()
+        # we publish the number of rows indexed so far to redis. The front end
+        # reads this to show the join "building up" (and that it's alive).
+        #
+        # This reports rows, NOT distinct keys. Keys only grow when a key is seen
+        # for the first time, so joining millions of rows on a low-cardinality
+        # key (a station, a cruise, a date) froze the reported number within
+        # seconds and made a healthy build look like a hang.
+        progress = get_progress()
+        try:
+            for row_number, row in enumerate(resource, start=1):
+                key = source_key(row, row_number)
+                try:
+                    current = db.get(key)
+                except KeyError:
+                    current = {}
+                for field, spec in fields.items():
+                    name = spec['name']
+                    curr = current.get(field)
+                    agg = spec['aggregate']
+                    if agg != 'count':
+                        new = row.get(name)
+                    else:
+                        new = ''
+                    if new is not None:
+                        current[field] = AGGREGATORS[agg].func(curr, new)
+                    elif field not in current:
+                        current[field] = None
+                if mode == 'full-outer':
+                    current['__key__'] = [row.get(field) for field in source_key.key_list]
+                db.set(key, current)
+                db_keys_usage.set(key, False)
+                progress.update(row_number)
+                yield row
+        finally:
+            # In deduplication mode the caller keeps reporting through the scan
+            # back out of the index, so it owns finish() instead.
+            if finish:
+                progress.finish()
 
     # Generates the joined data
     def process_target(resource):
         if deduplication:
-            # just empty the iterable
-            collections.deque(indexer(resource), maxlen=0)
-            for key, value in db.items():
-                row = dict(
-                    (f, None) for f in fields.keys()
-                )
-                row.update(dict(
-                    (k, AGGREGATORS[fields[k]['aggregate']].finaliser(v))
-                    for k, v in value.items()
-                ))
-                yield row
+            progress = get_progress()
+            try:
+                # just empty the iterable
+                collections.deque(indexer(resource, finish=False), maxlen=0)
+                # Reading the index back out is every bit as blocking as building
+                # it was, and emits one row per distinct key - so on a dedup that
+                # collapses millions of rows the dump's counter barely moves for
+                # the whole scan. Keep reporting through it.
+                progress.start_draining()
+                scanned = 0
+                for key, value in db.items():
+                    scanned += 1
+                    progress.update(scanned)
+                    row = dict(
+                        (f, None) for f in fields.keys()
+                    )
+                    row.update(dict(
+                        (k, AGGREGATORS[fields[k]['aggregate']].finaliser(v))
+                        for k, v in value.items()
+                    ))
+                    yield row
+            finally:
+                progress.finish()
         else:
             for row_number, row in enumerate(resource, start=1):
                 key = target_key(row, row_number)
@@ -299,10 +332,27 @@ def join_aux(source_name, source_key, source_delete,  # noqa: C901
                 row.update(extra)
                 yield row
             if mode == 'full-outer':
-                for key, value in db_keys_usage.items():
-                    if value is False:
-                        extra = create_extra_by_key(key)
-                        yield extra
+                # Once the target is exhausted a full-outer join scans the whole
+                # key index looking for keys the target never matched. Only the
+                # unmatched ones are emitted, so on a join that matched well this
+                # scan yields almost nothing and the dump's counter sits frozen
+                # at its final value until it completes. Report the scan itself.
+                scan_progress = BlockingStepProgress(
+                    cache_id,
+                    source_name,
+                    'join',
+                    flag=REDIS_PROGRESS_DRAINING_FLAG,
+                )
+                try:
+                    scanned = 0
+                    for key, value in db_keys_usage.items():
+                        scanned += 1
+                        scan_progress.update(scanned)
+                        if value is False:
+                            extra = create_extra_by_key(key)
+                            yield extra
+                finally:
+                    scan_progress.finish()
 
     # Creates extra by key
     def create_extra_by_key(key):
@@ -327,9 +377,10 @@ def join_aux(source_name, source_key, source_delete,  # noqa: C901
                 has_index = True
                 if source_delete:
                     # just empty the iterable
-                    collections.deque(indexer(resource), maxlen=0)
+                    collections.deque(
+                        indexer(resource, finish=not deduplication), maxlen=0)
                 else:
-                    yield indexer(resource)
+                    yield indexer(resource, finish=not deduplication)
                 if deduplication:
                     yield process_target(resource)
             elif name == target_name:

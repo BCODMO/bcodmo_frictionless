@@ -9,7 +9,7 @@ from dataflows import Flow
 from dataflows.helpers.resource_matcher import ResourceMatcher
 
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
-    KVFileBuildProgress,
+    BlockingStepProgress,
 )
 
 
@@ -73,7 +73,7 @@ def _sorter(rows, key_calc, reverse, batch_size, cache_id=None, resource_name=No
     # Buffering every row into the KVFile is a blocking step; publish the number
     # of rows buffered so far so the frontend can see it building up (and that
     # it's alive vs stalled).
-    progress = KVFileBuildProgress(cache_id, resource_name, "sort")
+    progress = BlockingStepProgress(cache_id, resource_name, "sort")
 
     def process(rows):
         for row_num, row in enumerate(rows):
@@ -81,10 +81,21 @@ def _sorter(rows, key_calc, reverse, batch_size, cache_id=None, resource_name=No
             progress.update(row_num + 1)
             yield (key, row)
 
-    db.insert(process(rows), batch_size=batch_size)
-    progress.finish()
-    for _, value in db.items(reverse=reverse):
-        yield value
+    try:
+        db.insert(process(rows), batch_size=batch_size)
+        # Buffering is only half the work: reading the rows back out in key order
+        # makes the store do the actual sort, and nothing downstream sees a row
+        # until it starts producing them. Finishing here (as this used to) made
+        # the badge disappear while the dump's row counter was still frozen -
+        # a completely blank gap on exactly the largest sorts. Keep reporting.
+        progress.start_draining()
+        emitted = 0
+        for _, value in db.items(reverse=reverse):
+            emitted += 1
+            progress.update(emitted)
+            yield value
+    finally:
+        progress.finish()
     db.close()
 
 

@@ -36,9 +36,9 @@ def get_redis_progress_parts_key(resource, cache_id):
 
 
 def get_redis_progress_join_key(resource, cache_id):
-    # The size (rows/keys) of the in-memory KVFile buffer built so far for this
-    # resource. Reported while a join/sort/duplicate is in its (blocking) buffer-
-    # building phase. Named "-join" for historical reasons; now generic.
+    # The number of rows/keys a blocking step has processed so far for this
+    # resource - either buffered (JOINING flag) or drained (DRAINING flag).
+    # Named "-join" for historical reasons; now generic.
     return f"{cache_id}-{resource}-join"
 
 
@@ -52,6 +52,12 @@ REDIS_PROGRESS_DELETED_FLAG = -6
 # a join's key index, or a sort/duplicate's row buffer. The size built so far is
 # stored under get_redis_progress_join_key. (Flag name kept for compatibility.)
 REDIS_PROGRESS_JOINING_FLAG = -7
+# A processor is reading rows back out of a blocking buffer (a sort's ordered
+# scan, a join's dedup/full-outer key scan) or discarding them outright (a
+# removed resource). Rows are being consumed but few or none reach the dump, so
+# the dump's row counter does not move - without this the UI looks frozen. The
+# number consumed so far is stored under get_redis_progress_join_key.
+REDIS_PROGRESS_DRAINING_FLAG = -8
 
 # 1 week expiration
 REDIS_EXPIRES = 60 * 60 * 24 * 7
@@ -61,25 +67,33 @@ REDIS_EXPIRES = 60 * 60 * 24 * 7
 PROGRESS_THROTTLE = 0.75
 
 
-class KVFileBuildProgress:
+class BlockingStepProgress:
     """
-    Reports the growth of a blocking KVFile build - a join's key index, or a
-    sort/duplicate's row buffer - to redis so the frontend can show it filling up
-    (and that it's alive vs stalled).
+    Reports the row-by-row progress of a step that blocks the pipeline - a join's
+    key index, a sort/duplicate's row buffer, the ordered scan back out of one of
+    those buffers, or a removed resource being discarded - to redis so the
+    frontend can show it moving (and that it's alive vs stalled).
+
+    None of these phases move the dump's row counter, which is the only other
+    thing that reports progress, so without this the UI sits on a frozen number.
 
     The count is published under a DEDICATED synthetic progress entry named
     "<resource> (<kind>)" rather than the resource's own -progress key. The
     resource is often streamed to the dump concurrently, and the dump writes
     row-count progress to the resource's real key ~every 0.75s, which would
     otherwise clobber our flag almost immediately. Nothing writes the synthetic
-    name, so the flag + count survive the whole build.
+    name, so the flag + count survive the whole step.
 
-    Call update(count) once per processed row/key (writes are throttled), then
-    finish() when the build completes to remove the entry so its "building" badge
-    doesn't linger. run's end-of-run cleanup is a backstop.
+    Call update(count) once per processed row/key (writes are throttled). A step
+    that then reads its buffer back out calls start_draining() and keeps calling
+    update() through the scan. Call finish() once the step is completely done -
+    NOT when its build phase ends - so the badge doesn't disappear while the step
+    is still blocking. run's end-of-run cleanup is a backstop.
     """
 
-    def __init__(self, cache_id, resource_name, kind):
+    def __init__(
+        self, cache_id, resource_name, kind, flag=REDIS_PROGRESS_JOINING_FLAG
+    ):
         self.cache_id = cache_id
         self.count = 0
         self._timer = time.time()
@@ -91,10 +105,23 @@ class KVFileBuildProgress:
             self.redis_conn.expire(resource_set_key, REDIS_EXPIRES)
             self._progress_key = get_redis_progress_key(self.progress_name, cache_id)
             self._count_key = get_redis_progress_join_key(self.progress_name, cache_id)
+            self.redis_conn.set(self._progress_key, flag, ex=REDIS_EXPIRES)
+            self.redis_conn.set(self._count_key, 0, ex=REDIS_EXPIRES)
+
+    def start_draining(self):
+        """
+        Switch from the buffer-building phase to the read-back phase, restarting
+        the count at zero. The synthetic entry keeps its name so the frontend can
+        still tell which resource and which kind of step this is; only the flag
+        changes, which is what the frontend words the message from.
+        """
+        self.count = 0
+        if self.redis_conn is not None:
             self.redis_conn.set(
-                self._progress_key, REDIS_PROGRESS_JOINING_FLAG, ex=REDIS_EXPIRES
+                self._progress_key, REDIS_PROGRESS_DRAINING_FLAG, ex=REDIS_EXPIRES
             )
             self.redis_conn.set(self._count_key, 0, ex=REDIS_EXPIRES)
+            self._timer = time.time()
 
     def update(self, count):
         self.count = count
@@ -112,3 +139,8 @@ class KVFileBuildProgress:
             self.redis_conn.srem(
                 get_redis_progress_resource_key(self.cache_id), self.progress_name
             )
+
+
+# The class covers more than KVFile builds now; the old name is kept so any
+# out-of-tree caller keeps working.
+KVFileBuildProgress = BlockingStepProgress

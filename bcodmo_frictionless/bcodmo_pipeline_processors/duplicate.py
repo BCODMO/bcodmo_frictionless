@@ -11,7 +11,7 @@ from dataflows import Flow
 from dataflows.helpers.resource_matcher import ResourceMatcher
 
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
-    KVFileBuildProgress,
+    BlockingStepProgress,
 )
 
 
@@ -180,7 +180,7 @@ def saver(resource, buf, cache_id=None):
     # Buffering every source row to disk is a per-row step that runs as the
     # resource streams downstream; publish the number of rows buffered so far so
     # the frontend can see it building up (and that it's alive vs stalled).
-    progress = KVFileBuildProgress(cache_id, resource.res.name, "duplicate")
+    progress = BlockingStepProgress(cache_id, resource.res.name, "duplicate")
     count = 0
     try:
         for row in resource:
