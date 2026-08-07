@@ -22,6 +22,7 @@ from bcodmo_frictionless.bcodmo_pipeline_processors.helper import (
     REDIS_PROGRESS_SAVING_START_FLAG,
     REDIS_PROGRESS_SAVING_DONE_FLAG,
     REDIS_EXPIRES,
+    PROGRESS_THROTTLE,
 )
 from bcodmo_frictionless.bcodmo_pipeline_processors.helper import get_missing_values
 
@@ -671,7 +672,7 @@ class S3Dumper(DumperBase):
 
                 writer.write_row(row)
 
-                if redis_conn is not None and time.time() - timer > 0.75:
+                if redis_conn is not None and time.time() - timer > PROGRESS_THROTTLE:
                     redis_conn.set(progress_key, row_number, ex=REDIS_EXPIRES)
                     timer = time.time()
 

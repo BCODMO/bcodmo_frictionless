@@ -62,9 +62,16 @@ REDIS_PROGRESS_DRAINING_FLAG = -8
 # 1 week expiration
 REDIS_EXPIRES = 60 * 60 * 24 * 7
 
-# How often (seconds) to publish buffer-building progress to redis. Matches the
-# throttle used by dump_to_s3 so we don't hammer redis on every row.
-PROGRESS_THROTTLE = 0.75
+# How often (seconds) to publish row-count progress to redis. Shared by
+# dump_to_s3's row counter and the blocking-step reporters below so the two
+# cannot drift apart.
+#
+# This is one SET per resource per interval, not per row, so the cost is set by
+# the interval alone and is negligible at this rate; the row loop itself only
+# pays a time.time() comparison. It is deliberately well under the SSE poll
+# interval (1s in laminar_server) -- the two throttles add up, and a writer
+# slower than the reader is what makes a counter visibly stutter.
+PROGRESS_THROTTLE = 0.25
 
 
 class BlockingStepProgress:
