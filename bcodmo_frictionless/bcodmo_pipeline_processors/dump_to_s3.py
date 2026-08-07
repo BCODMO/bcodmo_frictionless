@@ -34,6 +34,18 @@ UNIX_LINE_ENDING_STR = "\n"
 
 MB = 1024 * 1024
 
+# Ceiling on the total size of upload parts that have been handed to the thread
+# pool but have not finished uploading. Every one of those parts is held in
+# memory, so this is effectively an upper bound on the dump's memory footprint.
+#
+# Lowered from 1000 MB for the 2 GB c8g.medium pipeline worker, where a 1 GB
+# in-flight buffer plus the flow's own working set does not fit. calculate_partsize
+# tops out at 100 MB per part, so 300 MB still keeps ~3 large parts in the air --
+# enough to saturate the upload while bounding what a single dump can allocate.
+UPLOAD_BACKPRESSURE_BYTES = int(
+    os.environ.get("DUMP_UPLOAD_BACKPRESSURE_MB", "300")
+) * MB
+
 
 def calculate_partsize(num_parts_so_far):
     # Ensures we stay with small part size when the file is small, but increase the part size as the file gets bigger
@@ -680,7 +692,7 @@ class S3Dumper(DumperBase):
                     print(
                         f"Size of current running in MB: {round(size_running / (1024 * 1024), 4)}"
                     )
-                    while size_running > 1024 * 1024 * 1000:
+                    while size_running > UPLOAD_BACKPRESSURE_BYTES:
                         print(
                             f"Size of current running is too big (MB {round(size_running / (1024 * 1024), 4)}) - SLEEPING"
                         )

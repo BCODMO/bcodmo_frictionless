@@ -15,12 +15,12 @@ from bcodmo_frictionless.bcodmo_pipeline_processors import *
 TEST_DEV = os.environ.get("TEST_DEV", False) == "true"
 
 # The package re-exports `duplicate` as the processor's flow() function, which
-# shadows the submodule attribute - reach the module (for RowFileBuffer and its
-# module globals) explicitly.
+# shadows the submodule attribute - reach the module (for SpillingRowBuffer and
+# its module globals) explicitly.
 duplicate_module = importlib.import_module(
     "bcodmo_frictionless.bcodmo_pipeline_processors.duplicate"
 )
-RowFileBuffer = duplicate_module.RowFileBuffer
+SpillingRowBuffer = duplicate_module.SpillingRowBuffer
 
 
 def sample_data():
@@ -28,12 +28,14 @@ def sample_data():
 
 
 def dup_temp_files():
-    # The scratch files RowFileBuffer creates; used to assert nothing leaks.
+    # The scratch files SpillingRowBuffer creates on spill; used to assert
+    # nothing leaks (and that the in-memory path creates nothing at all).
     return set(glob.glob(os.path.join(tempfile.gettempdir(), "bcodmo_duplicate_*.pickle")))
 
 
 # ---------------------------------------------------------------------------
 # Functional: single, multi, duplicate_to_end, empty list
+# (small samples stay in memory under the default threshold - no temp files)
 # ---------------------------------------------------------------------------
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_duplicate_single():
@@ -105,11 +107,81 @@ def test_duplicate_multi_empty_list():
     assert dup_temp_files() == before
 
 
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_duplicate_spills_and_still_correct(monkeypatch):
+    # Force spilling for the whole flow (tiny threshold): the duplicated copy
+    # must still match the source exactly, and the scratch file must be gone.
+    monkeypatch.setattr(duplicate_module, "_default_spill_threshold", lambda: 1024)
+    before = dup_temp_files()
+    rows, dp, _ = Flow(
+        sample_data(),
+        duplicate({"source": "res_1", "target-name": "res_1_copy"}),
+    ).results()
+    assert rows[0] == sample_data()
+    assert rows[1] == sample_data()
+    assert dup_temp_files() == before  # spill file cleaned up
+
+
 # ---------------------------------------------------------------------------
-# RowFileBuffer: reservation, truncation, read-back, cleanup
+# In-memory phase: small buffer never touches the disk
 # ---------------------------------------------------------------------------
 @pytest.mark.skipif(TEST_DEV, reason="test development")
-def test_row_file_buffer_reserves_and_truncates(monkeypatch):
+def test_buffer_stays_in_memory_below_threshold(monkeypatch):
+    before = dup_temp_files()
+    reserved = []
+    # If the code ever tried to reserve disk, we'd see a fallocate call.
+    monkeypatch.setattr(os, "posix_fallocate", lambda *a: reserved.append(a))
+
+    buf = SpillingRowBuffer(spill_threshold=10 * 1024 * 1024)  # 10 MiB, ample
+    try:
+        expected = [{"i": i, "s": "x" * 100} for i in range(200)]
+        for row in expected:
+            buf.write(row)
+        buf.done_writing()
+
+        assert buf._spilled is False
+        assert buf.path is None          # never created a temp file
+        assert not reserved              # never reserved disk
+        assert dup_temp_files() == before
+        # replayable purely from memory, more than once
+        assert list(buf.read()) == expected
+        assert list(buf.read()) == expected
+    finally:
+        buf.close()
+    assert dup_temp_files() == before
+
+
+# ---------------------------------------------------------------------------
+# Spill transition: rows written before AND after the spill replay in order
+# ---------------------------------------------------------------------------
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_buffer_spills_when_threshold_exceeded():
+    before = dup_temp_files()
+    buf = SpillingRowBuffer(spill_threshold=1024)  # 1 KiB -> spills partway
+    try:
+        expected = [{"i": i, "s": "x" * 100} for i in range(200)]
+        for row in expected:
+            buf.write(row)
+        buf.done_writing()
+
+        assert buf._spilled is True
+        assert buf.path is not None and os.path.exists(buf.path)
+        # surplus reservation released: file size == real bytes written
+        assert os.path.getsize(buf.path) == buf._written
+        # every row, from both the in-memory prefix and the on-disk tail
+        assert list(buf.read()) == expected
+    finally:
+        buf.close()
+    assert not os.path.exists(buf.path)
+    assert dup_temp_files() == before
+
+
+# ---------------------------------------------------------------------------
+# SpillingRowBuffer disk path: reservation, truncation, read-back, cleanup
+# (spill_threshold=0 forces the on-disk path from the first row)
+# ---------------------------------------------------------------------------
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_row_buffer_reserves_and_truncates(monkeypatch):
     real_fallocate = os.posix_fallocate
     calls = []
 
@@ -119,7 +191,7 @@ def test_row_file_buffer_reserves_and_truncates(monkeypatch):
 
     monkeypatch.setattr(os, "posix_fallocate", spy)
 
-    buf = RowFileBuffer()
+    buf = SpillingRowBuffer(spill_threshold=0)
     try:
         expected = [{"i": i, "s": "x" * 100} for i in range(200)]
         for row in expected:
@@ -140,10 +212,10 @@ def test_row_file_buffer_reserves_and_truncates(monkeypatch):
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
-def test_row_file_buffer_row_larger_than_chunk(monkeypatch):
+def test_row_buffer_row_larger_than_chunk(monkeypatch):
     # A single row bigger than the reservation chunk must still be accommodated.
     monkeypatch.setattr(duplicate_module, "RESERVE_CHUNK_SIZE", 1024)
-    buf = RowFileBuffer()
+    buf = SpillingRowBuffer(spill_threshold=0)
     try:
         big = {"blob": "y" * 50_000}
         buf.write(big)
@@ -155,22 +227,43 @@ def test_row_file_buffer_row_larger_than_chunk(monkeypatch):
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
-def test_row_file_buffer_finalizer_backstop():
-    # An abandoned buffer (no close()) still has its temp file removed on GC.
-    buf = RowFileBuffer()
+def test_row_buffer_finalizer_backstop():
+    # An abandoned buffer (no close()) still has its spill file removed on GC.
+    buf = SpillingRowBuffer(spill_threshold=0)
+    buf.write({"a": 1})  # forces the spill file into existence
     path = buf.path
-    buf.write({"a": 1})
-    assert os.path.exists(path)
+    assert path is not None and os.path.exists(path)
     del buf
     gc.collect()
     assert not os.path.exists(path)
 
 
 # ---------------------------------------------------------------------------
+# Threshold detection
+# ---------------------------------------------------------------------------
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_default_threshold_env_override(monkeypatch):
+    monkeypatch.setenv("DUPLICATE_SPILL_THRESHOLD", "12345")
+    assert duplicate_module._default_spill_threshold() == 12345
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_default_threshold_is_positive_and_clamped(monkeypatch):
+    monkeypatch.delenv("DUPLICATE_SPILL_THRESHOLD", raising=False)
+    monkeypatch.delenv("DUPLICATE_SPILL_MEMORY_FRACTION", raising=False)
+    t = duplicate_module._default_spill_threshold()
+    assert isinstance(t, int)
+    assert duplicate_module.MIN_SPILL_THRESHOLD <= t <= duplicate_module.MAX_SPILL_THRESHOLD
+
+
+# ---------------------------------------------------------------------------
 # Out of space: error + cleanup, via fallocate and via the statvfs fallback
+# (force spilling so the disk path is exercised)
 # ---------------------------------------------------------------------------
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_duplicate_out_of_space(monkeypatch):
+    monkeypatch.setattr(duplicate_module, "_default_spill_threshold", lambda: 0)
+
     def full(fd, offset, length):
         raise OSError(errno.ENOSPC, "No space left on device")
 
@@ -190,6 +283,8 @@ def test_duplicate_out_of_space(monkeypatch):
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_duplicate_fallocate_unsupported_fallback(monkeypatch):
     # Filesystem without fallocate -> best-effort statvfs check still fails fast.
+    monkeypatch.setattr(duplicate_module, "_default_spill_threshold", lambda: 0)
+
     def unsupported(fd, offset, length):
         raise OSError(errno.EOPNOTSUPP, "operation not supported")
 
