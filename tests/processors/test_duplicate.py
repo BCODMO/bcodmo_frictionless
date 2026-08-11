@@ -3,6 +3,7 @@ import gc
 import glob
 import importlib
 import os
+import pickle
 import shutil
 import tempfile
 
@@ -239,6 +240,76 @@ def test_row_buffer_finalizer_backstop():
 
 
 # ---------------------------------------------------------------------------
+# Shared (process-wide) memory budget
+# ---------------------------------------------------------------------------
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_buffers_share_one_global_budget(monkeypatch):
+    # Two buffers alive at once (two duplicate steps, or duplicate_to_end) must
+    # not each hold the whole budget - the second spills because of what the
+    # first is already holding, not because of its own rows.
+    monkeypatch.setattr(duplicate_module, "_default_spill_threshold", lambda: 20_000)
+    row = {"s": "x" * 200}
+    first = SpillingRowBuffer()
+    second = SpillingRowBuffer()
+    try:
+        for _ in range(40):
+            first.write(row)
+        assert first._spilled is False  # still under the shared budget alone
+        for _ in range(40):
+            second.write(row)
+        assert second._spilled is True
+        # ...and it spilled well before its own rows reached the budget.
+        assert second._written < 20_000
+        second.done_writing()
+        assert list(second.read()) == [row] * 40
+        assert list(first.read()) == [row] * 40
+    finally:
+        first.close()
+        second.close()
+    assert SpillingRowBuffer._in_memory_bytes == 0
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_closing_returns_memory_to_the_shared_budget():
+    before = SpillingRowBuffer._in_memory_bytes
+    buf = SpillingRowBuffer(spill_threshold=10 * 1024 * 1024)
+    buf.write({"a": "x" * 1000})
+    assert SpillingRowBuffer._in_memory_bytes > before
+    buf.close()
+    assert SpillingRowBuffer._in_memory_bytes == before
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_abandoned_buffer_returns_memory_to_the_shared_budget():
+    # No close(): the charge is still handed back when the buffer is collected,
+    # otherwise a failed pipeline would permanently shrink the budget.
+    before = SpillingRowBuffer._in_memory_bytes
+    buf = SpillingRowBuffer(spill_threshold=10 * 1024 * 1024)
+    buf.write({"a": "x" * 1000})
+    assert SpillingRowBuffer._in_memory_bytes > before
+    del buf
+    gc.collect()
+    assert SpillingRowBuffer._in_memory_bytes == before
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_memory_accounting_includes_object_overhead():
+    # Narrow rows cost substantially more than their payload (bytes header plus
+    # the list slot); counting only the payload spills far too late.
+    rows = [{"i": i} for i in range(500)]
+    payload = sum(
+        len(pickle.dumps(row, protocol=pickle.HIGHEST_PROTOCOL)) for row in rows
+    )
+    buf = SpillingRowBuffer(spill_threshold=10 * 1024 * 1024)
+    try:
+        for row in rows:
+            buf.write(row)
+        assert buf._mem_bytes > payload * 1.3
+    finally:
+        buf.close()
+
+
+# ---------------------------------------------------------------------------
 # Threshold detection
 # ---------------------------------------------------------------------------
 @pytest.mark.skipif(TEST_DEV, reason="test development")
@@ -253,7 +324,29 @@ def test_default_threshold_is_positive_and_clamped(monkeypatch):
     monkeypatch.delenv("DUPLICATE_SPILL_MEMORY_FRACTION", raising=False)
     t = duplicate_module._default_spill_threshold()
     assert isinstance(t, int)
-    assert duplicate_module.MIN_SPILL_THRESHOLD <= t <= duplicate_module.MAX_SPILL_THRESHOLD
+    assert t >= duplicate_module.MIN_SPILL_THRESHOLD
+    limit = duplicate_module._container_memory_limit_bytes()
+    if limit:
+        # No absolute ceiling: the budget scales with the machine's RAM.
+        assert t == max(
+            duplicate_module.MIN_SPILL_THRESHOLD,
+            int(limit * duplicate_module.DEFAULT_SPILL_MEMORY_FRACTION),
+        )
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_default_threshold_fraction_env(monkeypatch):
+    monkeypatch.delenv("DUPLICATE_SPILL_THRESHOLD", raising=False)
+    if not duplicate_module._container_memory_limit_bytes():
+        pytest.skip("no memory limit detectable here")
+    monkeypatch.setenv("DUPLICATE_SPILL_MEMORY_FRACTION", "0.9")
+    big = duplicate_module._default_spill_threshold()
+    monkeypatch.setenv("DUPLICATE_SPILL_MEMORY_FRACTION", "0.0000001")
+    assert duplicate_module._default_spill_threshold() <= big
+    assert (
+        duplicate_module._default_spill_threshold()
+        == duplicate_module.MIN_SPILL_THRESHOLD
+    )
 
 
 # ---------------------------------------------------------------------------

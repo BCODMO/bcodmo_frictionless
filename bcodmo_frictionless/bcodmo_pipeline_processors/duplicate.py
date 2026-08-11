@@ -4,7 +4,9 @@ import os
 import pickle
 import shutil
 import struct
+import sys
 import tempfile
+import threading
 import weakref
 
 from dataflows import Flow
@@ -29,23 +31,36 @@ FILE_BUFFER_SIZE = 1 << 20
 RESERVE_CHUNK_SIZE = int(os.environ.get("DUPLICATE_RESERVE_CHUNK", 64 * 1024 * 1024))
 
 
-# Once the rows held in memory grow past this many bytes, the buffer stops
-# holding them in RAM and spills to local disk. The default is a fraction of the
-# worker's detected memory limit (see _default_spill_threshold), so a small
+# Total bytes of rows that *all* live SpillingRowBuffers together may hold in
+# memory before they start spilling to local disk. The default is a fraction of
+# the worker's detected memory limit (see _default_spill_threshold), so a small
 # instance (e.g. a 2 GiB worker) spills early and can't OOM, while a larger
 # instance keeps more in memory and often avoids the disk entirely. Pin an
 # absolute budget with DUPLICATE_SPILL_THRESHOLD (bytes) or change the fraction
-# with DUPLICATE_SPILL_MEMORY_FRACTION.
+# with DUPLICATE_SPILL_MEMORY_FRACTION. Both are process-wide budgets, not
+# per-buffer ones: a pipeline may have several buffers alive at once (multiple
+# duplicate steps, or duplicate_to_end deferring every buffer to the end of the
+# package) and they share this single figure.
+#
+# The fraction has to leave room for everything else the same worker holds at
+# the same time: a join or sort step's KVFile caches (~1 GB at KVFILE_CACHE_SIZE),
+# dump_to_s3's in-flight upload buffer (~300 MB), and the interpreter itself.
+# There is deliberately no absolute byte ceiling — the big worker has 30 GiB and
+# should use it — so the fraction alone is what keeps the tightest configuration
+# (a 2 GiB worker running duplicate + join) out of OOM territory.
 DEFAULT_SPILL_MEMORY_FRACTION = 0.25
 
-# Clamp the auto-computed threshold: never spill below MIN (tiny copies should
-# just stay in RAM) and never hold more than MAX in memory even on a huge box
-# (spilling there is cheap, and we don't want duplicate hoarding many GB).
+# Never spill below this: tiny copies should just stay in RAM.
 MIN_SPILL_THRESHOLD = 32 * 1024 * 1024
-MAX_SPILL_THRESHOLD = 1024 * 1024 * 1024
 
 # Used only when no memory limit can be detected at all.
 FALLBACK_SPILL_THRESHOLD = 256 * 1024 * 1024
+
+# Bytes a list costs per element it holds (one pointer on 64-bit CPython). The
+# blob's own size is measured with sys.getsizeof, which includes the bytes
+# object header; len(blob) alone undercounts a narrow row by 1.3-2x and would
+# let the buffer overshoot its budget before spilling.
+LIST_SLOT_BYTES = 8
 
 
 def _read_int_file(path):
@@ -92,7 +107,8 @@ def _container_memory_limit_bytes():
 
 
 def _default_spill_threshold():
-    """Bytes of in-memory rows to tolerate before spilling to disk."""
+    """Bytes of in-memory rows this process tolerates, across all live buffers,
+    before they spill to disk."""
     override = os.environ.get("DUPLICATE_SPILL_THRESHOLD")
     if override:
         try:
@@ -110,8 +126,37 @@ def _default_spill_threshold():
 
     limit = _container_memory_limit_bytes()
     if limit and limit > 0:
-        return min(MAX_SPILL_THRESHOLD, max(MIN_SPILL_THRESHOLD, int(limit * fraction)))
+        return max(MIN_SPILL_THRESHOLD, int(limit * fraction))
     return FALLBACK_SPILL_THRESHOLD
+
+
+def _blob_memory_cost(blob):
+    """Approximate resident cost of holding one pickled row in the buffer list."""
+    return sys.getsizeof(blob) + LIST_SLOT_BYTES
+
+
+class _MemoryCharge:
+    """The in-memory bytes one buffer currently owes the shared budget.
+
+    Kept in its own object, not on the buffer, so a finalizer can hand the bytes
+    back without holding a reference that would keep the buffer alive.
+    """
+
+    __slots__ = ("bytes",)
+
+    def __init__(self):
+        self.bytes = 0
+
+
+def _release_charge(charge):
+    # Invariant: the shared total is the sum of the live charges, so every
+    # charged byte is given back exactly once - on spill, on close, or (for an
+    # abandoned buffer) from the finalizer.
+    if not charge.bytes:
+        return
+    with SpillingRowBuffer._budget_lock:
+        SpillingRowBuffer._in_memory_bytes -= charge.bytes
+    charge.bytes = 0
 
 
 def _unlink_quietly(path):
@@ -148,9 +193,15 @@ class SpillingRowBuffer:
     list is released, and every subsequent row streams straight to disk. Either
     way the read side replays the rows in insertion order.
 
-    The threshold defaults to a fraction of the worker's memory limit (see
+    The budget defaults to a fraction of the worker's memory limit (see
     _default_spill_threshold), so a small instance spills sooner and won't OOM,
     while a large instance keeps more in RAM and often avoids the disk entirely.
+    It is shared: the class tracks the in-memory bytes of every live buffer, and
+    a buffer spills as soon as the *process-wide* total crosses the budget, not
+    just when its own rows do. Several buffers are routinely alive at once (two
+    duplicate steps, or duplicate_to_end holding one buffer per source resource
+    until the end of the package); budgeting each of them independently meant
+    n buffers could hold n times the fraction and OOM the worker.
 
     (This replaced an in-memory KVFile buffer whose LRU cache had to hold every
     row and fell off a cliff into per-row SQLite queries once the row count
@@ -170,15 +221,33 @@ class SpillingRowBuffer:
     (non-reserving, but still fails fast).
     """
 
+    # Process-wide accounting shared by every live instance. `_budget_bytes` is
+    # the ceiling on `_in_memory_bytes`, the sum of the unspilled bytes held by
+    # all of them. The lock guards both.
+    _budget_lock = threading.Lock()
+    _budget_bytes = FALLBACK_SPILL_THRESHOLD
+    _in_memory_bytes = 0
+
     def __init__(self, spill_threshold=None):
+        # The global budget is refreshed per buffer rather than cached at import
+        # so that the env vars (and tests patching _default_spill_threshold) are
+        # picked up, and so a stale budget can never outlive the buffers it was
+        # computed for.
+        default = _default_spill_threshold()
+        with SpillingRowBuffer._budget_lock:
+            SpillingRowBuffer._budget_bytes = default
+        # An explicit threshold caps this buffer alone; the shared budget still
+        # applies on top of it, so a buffer can spill before reaching its own.
         self._spill_threshold = (
-            spill_threshold
-            if spill_threshold is not None
-            else _default_spill_threshold()
+            spill_threshold if spill_threshold is not None else default
         )
-        # In-memory phase: raw pickle blobs and their framed byte total.
+        # In-memory phase: raw pickle blobs and the bytes they've charged against
+        # the shared budget.
         self._mem = []
-        self._mem_bytes = 0
+        self._charge_state = _MemoryCharge()
+        self._mem_finalizer = weakref.finalize(
+            self, _release_charge, self._charge_state
+        )
         self._spilled = False
         self._closed = False
         # Disk phase state (created lazily on spill).
@@ -190,6 +259,24 @@ class SpillingRowBuffer:
         self._reserved = 0
         self._can_fallocate = True
         self._finalizer = None
+
+    # -- shared memory budget (only used while unspilled) --------------------
+
+    @property
+    def _mem_bytes(self):
+        return self._charge_state.bytes
+
+    def _charge(self, n):
+        """Account for `n` more in-memory bytes; True if they can stay in RAM."""
+        self._charge_state.bytes += n
+        with SpillingRowBuffer._budget_lock:
+            SpillingRowBuffer._in_memory_bytes += n
+            total = SpillingRowBuffer._in_memory_bytes
+            budget = SpillingRowBuffer._budget_bytes
+        return self._charge_state.bytes <= self._spill_threshold and total <= budget
+
+    def _release(self):
+        _release_charge(self._charge_state)
 
     # -- disk-space reservation (only used once spilled) --------------------
 
@@ -261,10 +348,12 @@ class SpillingRowBuffer:
         for blob in self._mem:
             self._write_frame(blob)
         self._mem = None
-        self._mem_bytes = 0
+        self._release()
         self._spilled = True
         print(
-            f"duplicate: in-memory buffer exceeded {self._spill_threshold} bytes, "
+            f"duplicate: in-memory rows exceeded the buffer's "
+            f"{self._spill_threshold} byte limit or the shared "
+            f"{SpillingRowBuffer._budget_bytes} byte budget, "
             f"spilling to {self.path}"
         )
 
@@ -276,8 +365,7 @@ class SpillingRowBuffer:
             self._write_frame(blob)
             return
         self._mem.append(blob)
-        self._mem_bytes += len(blob) + 4
-        if self._mem_bytes > self._spill_threshold:
+        if not self._charge(_blob_memory_cost(blob)):
             self._spill()
 
     def done_writing(self):
@@ -313,7 +401,8 @@ class SpillingRowBuffer:
             return
         self._closed = True
         self._mem = None
-        self._mem_bytes = 0
+        self._release()
+        self._mem_finalizer.detach()
         if self._writer is not None:
             try:
                 self._writer.close()
