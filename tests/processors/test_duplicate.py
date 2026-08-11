@@ -6,6 +6,7 @@ import os
 import pickle
 import shutil
 import tempfile
+import weakref
 
 import pytest
 from dataflows import Flow
@@ -310,7 +311,7 @@ def test_memory_accounting_includes_object_overhead():
 
 
 # ---------------------------------------------------------------------------
-# Threshold detection
+# Byte-budget override (DUPLICATE_SPILL_THRESHOLD)
 # ---------------------------------------------------------------------------
 @pytest.mark.skipif(TEST_DEV, reason="test development")
 def test_default_threshold_env_override(monkeypatch):
@@ -319,34 +320,322 @@ def test_default_threshold_env_override(monkeypatch):
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
-def test_default_threshold_is_positive_and_clamped(monkeypatch):
+def test_no_threshold_env_means_pressure_driven(monkeypatch):
     monkeypatch.delenv("DUPLICATE_SPILL_THRESHOLD", raising=False)
-    monkeypatch.delenv("DUPLICATE_SPILL_MEMORY_FRACTION", raising=False)
-    t = duplicate_module._default_spill_threshold()
-    assert isinstance(t, int)
-    assert t >= duplicate_module.MIN_SPILL_THRESHOLD
-    limit = duplicate_module._container_memory_limit_bytes()
-    if limit:
-        # No absolute ceiling: the budget scales with the machine's RAM.
-        assert t == max(
-            duplicate_module.MIN_SPILL_THRESHOLD,
-            int(limit * duplicate_module.DEFAULT_SPILL_MEMORY_FRACTION),
-        )
+    # None = no byte budget at all; spilling is decided by memory pressure.
+    assert duplicate_module._default_spill_threshold() is None
 
 
 @pytest.mark.skipif(TEST_DEV, reason="test development")
-def test_default_threshold_fraction_env(monkeypatch):
-    monkeypatch.delenv("DUPLICATE_SPILL_THRESHOLD", raising=False)
-    if not duplicate_module._container_memory_limit_bytes():
-        pytest.skip("no memory limit detectable here")
-    monkeypatch.setenv("DUPLICATE_SPILL_MEMORY_FRACTION", "0.9")
-    big = duplicate_module._default_spill_threshold()
-    monkeypatch.setenv("DUPLICATE_SPILL_MEMORY_FRACTION", "0.0000001")
-    assert duplicate_module._default_spill_threshold() <= big
-    assert (
-        duplicate_module._default_spill_threshold()
-        == duplicate_module.MIN_SPILL_THRESHOLD
+def test_malformed_threshold_env_ignored(monkeypatch):
+    monkeypatch.setenv("DUPLICATE_SPILL_THRESHOLD", "not-a-number")
+    assert duplicate_module._default_spill_threshold() is None
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_threshold_env_spills_deterministically(monkeypatch):
+    # What the deterministic (test / pinned-operator) path has to guarantee: the
+    # budget is process-global and the pressure monitor is not consulted at all.
+    monkeypatch.setenv("DUPLICATE_SPILL_THRESHOLD", "20000")
+    monkeypatch.setattr(
+        duplicate_module,
+        "_memory_pressure",
+        lambda force=False: pytest.fail("pressure consulted despite a byte budget"),
     )
+    row = {"s": "x" * 200}
+    buf = SpillingRowBuffer()
+    try:
+        for _ in range(200):
+            buf.write(row)
+        buf.done_writing()
+        assert buf._spilled is True
+        assert list(buf.read()) == [row] * 200
+    finally:
+        buf.close()
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_full_flow_spills_via_threshold_env(monkeypatch):
+    monkeypatch.setenv("DUPLICATE_SPILL_THRESHOLD", "512")
+    before = dup_temp_files()
+    rows, dp, _ = Flow(
+        sample_data(),
+        duplicate({"source": "res_1", "target-name": "res_1_copy"}),
+    ).results()
+    assert rows[0] == sample_data()
+    assert rows[1] == sample_data()
+    assert dup_temp_files() == before
+
+
+# ---------------------------------------------------------------------------
+# Pressure monitor: headroom margin, victim selection, sample cache
+# (the raw readings are faked, so none of this depends on the real cgroup)
+# ---------------------------------------------------------------------------
+MIB = 1024 * 1024
+
+
+@pytest.fixture
+def pressure(monkeypatch):
+    """Drive the pressure monitor from a fake container reading.
+
+    `pressure.headroom` is what the monitor will next measure as free; setting
+    it low puts the process under pressure. The sample cache is cleared so each
+    test starts from a known state.
+    """
+
+    class Fake:
+        def __init__(self):
+            self.limit = 8192 * MIB
+            self.headroom = 4096 * MIB
+            self.samples = 0
+
+        def working_set(self):
+            self.samples += 1
+            return self.limit - self.headroom
+
+    fake = Fake()
+    # Isolate the victim registry from any buffer another test left alive.
+    monkeypatch.setattr(SpillingRowBuffer, "_live", weakref.WeakSet())
+    monkeypatch.delenv("DUPLICATE_SPILL_THRESHOLD", raising=False)
+    monkeypatch.delenv("DUPLICATE_SPILL_HEADROOM", raising=False)
+    monkeypatch.setattr(duplicate_module, "_pressure_sample", None)
+    monkeypatch.setattr(
+        duplicate_module, "_container_memory_limit_bytes", lambda: fake.limit
+    )
+    monkeypatch.setattr(duplicate_module, "_cgroup_v2_working_set", fake.working_set)
+    monkeypatch.setattr(duplicate_module, "_cgroup_v1_working_set", lambda: None)
+    monkeypatch.setattr(
+        duplicate_module,
+        "_mem_available_bytes",
+        lambda: pytest.fail("fell through to the bare-host reading"),
+    )
+    # Sampling is unconditional in these tests; the 0.5s cache has its own.
+    monkeypatch.setattr(duplicate_module, "PRESSURE_SAMPLE_INTERVAL", 0)
+    yield fake
+    duplicate_module._pressure_sample = None
+
+
+def fill(buf, n_rows, row_bytes=1000):
+    row = {"s": "x" * row_bytes}
+    for _ in range(n_rows):
+        buf.write(row)
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_no_pressure_never_spills(pressure, monkeypatch):
+    # Plenty of headroom: nothing caps the buffer, so it grows well past the
+    # victim threshold without ever touching the disk.
+    monkeypatch.setattr(duplicate_module, "MIN_SPILL_THRESHOLD", 1024)
+    pressure.headroom = 4096 * MIB
+    before = dup_temp_files()
+    buf = SpillingRowBuffer()
+    try:
+        assert SpillingRowBuffer._budget_bytes is None  # no reserved budget
+        assert buf._spill_threshold is None
+        fill(buf, 2000)
+        assert buf._spilled is False
+        assert buf.path is None
+        assert buf._mem_bytes > 1024 * 1024
+        assert dup_temp_files() == before
+    finally:
+        buf.close()
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_pressure_spills_largest_buffer_first(pressure, monkeypatch):
+    monkeypatch.setattr(duplicate_module, "MIN_SPILL_THRESHOLD", 4096)
+    big = SpillingRowBuffer()
+    small = SpillingRowBuffer()
+    try:
+        fill(big, 400)
+        fill(small, 20)
+        assert big._mem_bytes > small._mem_bytes >= 4096
+        assert (big._spilled, small._spilled) == (False, False)
+
+        # Squeeze: the next write finds headroom under the margin. Spilling the
+        # big buffer is enough, so the small one must survive.
+        freed_by_big = big._mem_bytes
+
+        def recover():
+            pressure.headroom = 4096 * MIB
+            return pressure.limit - pressure.headroom
+
+        pressure.headroom = 1 * MIB
+        monkeypatch.setattr(
+            duplicate_module,
+            "_cgroup_v2_working_set",
+            lambda: recover() if big._spilled else pressure.working_set(),
+        )
+        small.write({"s": "y" * 1000})
+
+        assert big._spilled is True
+        assert small._spilled is False
+        assert big._written >= freed_by_big * 0.5  # everything it held is on disk
+        big.done_writing()
+        assert list(big.read()) == [{"s": "x" * 1000}] * 400
+    finally:
+        big.close()
+        small.close()
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_pressure_spills_every_eligible_buffer_when_needed(pressure, monkeypatch):
+    # Pressure that never lets up: both buffers spill, largest first, and then
+    # relief gives up rather than looping.
+    monkeypatch.setattr(duplicate_module, "MIN_SPILL_THRESHOLD", 4096)
+    big = SpillingRowBuffer()
+    small = SpillingRowBuffer()
+    try:
+        fill(big, 400)
+        fill(small, 20)
+        order = []
+        real_spill = duplicate_module.SpillingRowBuffer._spill
+
+        def spy(self):
+            order.append(self)
+            return real_spill(self)
+
+        monkeypatch.setattr(duplicate_module.SpillingRowBuffer, "_spill", spy)
+        pressure.headroom = 1 * MIB
+        small.write({"s": "y" * 1000})
+        assert order == [big, small]
+    finally:
+        big.close()
+        small.close()
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_buffer_below_min_spill_threshold_is_never_a_victim(pressure):
+    # 32MiB default MIN_SPILL_THRESHOLD, tiny buffer: spilling it would cost a
+    # file and a reservation and buy back nothing.
+    tiny = SpillingRowBuffer()
+    try:
+        fill(tiny, 10)
+        assert tiny._mem_bytes < duplicate_module.MIN_SPILL_THRESHOLD
+        pressure.headroom = 1 * MIB
+        tiny.write({"s": "z" * 1000})
+        assert tiny._spilled is False
+        assert tiny.path is None
+    finally:
+        tiny.close()
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_spill_headroom_env_override(pressure, monkeypatch):
+    monkeypatch.setattr(duplicate_module, "MIN_SPILL_THRESHOLD", 4096)
+    # 2 GiB of headroom is above the default margin, so nothing spills...
+    pressure.headroom = 2048 * MIB
+    buf = SpillingRowBuffer()
+    try:
+        fill(buf, 200)
+        assert buf._spilled is False
+        # ...but not if the operator demands 4 GiB of slack.
+        monkeypatch.setenv("DUPLICATE_SPILL_HEADROOM", str(4096 * MIB))
+        buf.write({"s": "x" * 1000})
+        assert buf._spilled is True
+    finally:
+        buf.close()
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_spill_headroom_margin_defaults(monkeypatch):
+    monkeypatch.delenv("DUPLICATE_SPILL_HEADROOM", raising=False)
+    monkeypatch.setattr(
+        duplicate_module, "_container_memory_limit_bytes", lambda: 2048 * MIB
+    )
+    # Small worker: the floor wins.
+    assert duplicate_module._spill_headroom_margin() == 512 * MIB
+    # Big worker: the fraction wins, so it keeps proportionally more slack.
+    monkeypatch.setattr(
+        duplicate_module, "_container_memory_limit_bytes", lambda: 30720 * MIB
+    )
+    assert duplicate_module._spill_headroom_margin() == int(30720 * MIB * 0.10)
+    # No detectable limit at all: still the floor, never zero.
+    monkeypatch.setattr(duplicate_module, "_container_memory_limit_bytes", lambda: None)
+    assert duplicate_module._spill_headroom_margin() == 512 * MIB
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_malformed_headroom_env_ignored(monkeypatch):
+    monkeypatch.setattr(
+        duplicate_module, "_container_memory_limit_bytes", lambda: 2048 * MIB
+    )
+    for bad in ("", "lots", "3.5", "-1x"):
+        monkeypatch.setenv("DUPLICATE_SPILL_HEADROOM", bad)
+        assert duplicate_module._spill_headroom_margin() == 512 * MIB
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_pressure_reading_is_cached(pressure, monkeypatch):
+    # The per-row cost must be a comparison, not three file reads.
+    monkeypatch.setattr(duplicate_module, "PRESSURE_SAMPLE_INTERVAL", 30)
+    buf = SpillingRowBuffer()
+    try:
+        fill(buf, 500)
+        assert pressure.samples == 1
+        # ...and a forced sample (what a spill does) bypasses the cache.
+        duplicate_module._memory_pressure(force=True)
+        assert pressure.samples == 2
+    finally:
+        buf.close()
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_pressure_cache_expires(pressure, monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(duplicate_module.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(duplicate_module, "PRESSURE_SAMPLE_INTERVAL", 0.5)
+    buf = SpillingRowBuffer()
+    try:
+        buf.write({"a": 1})
+        assert pressure.samples == 1
+        clock[0] += 0.4
+        buf.write({"a": 2})
+        assert pressure.samples == 1
+        clock[0] += 0.2
+        buf.write({"a": 3})
+        assert pressure.samples == 2
+    finally:
+        buf.close()
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_unmeasurable_memory_never_spills(monkeypatch):
+    # Nothing readable anywhere: no pressure can be proven, so stay in RAM
+    # rather than spilling every buffer on a machine we can't measure.
+    monkeypatch.delenv("DUPLICATE_SPILL_THRESHOLD", raising=False)
+    monkeypatch.setattr(duplicate_module, "_pressure_sample", None)
+    monkeypatch.setattr(duplicate_module, "_cgroup_v2_working_set", lambda: None)
+    monkeypatch.setattr(duplicate_module, "_cgroup_v1_working_set", lambda: None)
+    monkeypatch.setattr(duplicate_module, "_mem_available_bytes", lambda: None)
+    under_pressure, headroom, _ = duplicate_module._memory_pressure(force=True)
+    assert headroom is None
+    assert under_pressure is False
+    duplicate_module._pressure_sample = None
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_working_set_excludes_inactive_page_cache(monkeypatch):
+    # Reclaimable page cache is not pressure; counting it would spill constantly
+    # on any worker that has read a large file.
+    monkeypatch.setattr(duplicate_module, "_read_int_file", lambda path: 1_000_000)
+    monkeypatch.setattr(
+        duplicate_module, "_read_stat_field", lambda path, field: 300_000
+    )
+    assert duplicate_module._cgroup_v2_working_set() == 700_000
+    assert duplicate_module._cgroup_v1_working_set() == 700_000
+    # A stat file without the field at all: fall back to the raw usage.
+    monkeypatch.setattr(duplicate_module, "_read_stat_field", lambda path, field: None)
+    assert duplicate_module._cgroup_v2_working_set() == 1_000_000
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_read_stat_field_parses_cgroup_file(tmp_path):
+    stat = tmp_path / "memory.stat"
+    stat.write_text("anon 400000\ninactive_file 300000\nslab 1234\n")
+    assert duplicate_module._read_stat_field(str(stat), "inactive_file") == 300000
+    assert duplicate_module._read_stat_field(str(stat), "nope") is None
+    assert duplicate_module._read_stat_field(str(tmp_path / "missing"), "anon") is None
 
 
 # ---------------------------------------------------------------------------
