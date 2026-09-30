@@ -719,6 +719,14 @@ class S3Dumper(DumperBase):
             DumperBase.inc_attr(
                 resource.res.descriptor, self.resource_rowcount, row_number
             )
+            # resource.res holds a deep copy of its descriptor, so the count
+            # above never reaches the package descriptor that is written out
+            # as datapackage.json. Stamp it there too.
+            for resource_descriptor in self.datapackage.descriptor["resources"]:
+                if resource_descriptor["name"] == resource_name:
+                    DumperBase.inc_attr(
+                        resource_descriptor, self.resource_rowcount, row_number
+                    )
             resource.res.commit()
             self.datapackage.commit()
 

@@ -15,6 +15,7 @@ import logging
 import io
 import csv
 import hashlib
+import json
 from moto.server import ThreadedMotoServer
 
 from bcodmo_frictionless.bcodmo_pipeline_processors import *
@@ -58,6 +59,48 @@ def test_dump_s3():
     rows, datapackage, _ = Flow(*flows).results()
     assert len(datapackage.resources) == 1
     assert datapackage.descriptor["count_of_rows"] == 4
+
+
+@mock_aws
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_dump_s3_resource_row_count():
+    # The written datapackage.json carries each resource's row count, not just
+    # the package total
+    conn = boto3.client("s3")
+    conn.create_bucket(Bucket="testing_bucket")
+    conn.create_bucket(Bucket="testing_dump_bucket")
+    conn.upload_file("data/test.csv", "testing_bucket", "test.csv")
+
+    flows = [
+        load(
+            {
+                "from": "s3://testing_bucket/test.csv",
+                "name": "res",
+                "format": "csv",
+                "infer_strategy": "strings",
+                "cast_strategy": "strings",
+            }
+        ),
+        dump_to_s3(
+            {
+                "prefix": "test",
+                "force-format": True,
+                "format": "csv",
+                "bucket_name": "testing_dump_bucket",
+                "data_manager": "test",
+            }
+        ),
+    ]
+
+    Flow(*flows).process()
+    descriptor = json.loads(
+        conn.get_object(Bucket="testing_dump_bucket", Key="test/datapackage.json")[
+            "Body"
+        ].read()
+    )
+    assert descriptor["count_of_rows"] == 4
+    (resource,) = descriptor["resources"]
+    assert resource["count_of_rows"] == 4
 
 
 @mock_aws
