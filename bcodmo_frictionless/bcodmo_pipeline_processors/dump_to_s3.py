@@ -196,9 +196,9 @@ class S3Dumper(DumperBase):
             )
             if "Contents" in res:
                 contents = res["Contents"]
-                if len(contents) >= 10:
+                if len(contents) > 20:
                     raise Exception(
-                        f"Throwing an error from the dump_to_s3 processor because the number of files to be deleted was more than 10. This is a safety measure to ensure we don't accidently more files than expected."
+                        f"Throwing an error from the dump_to_s3 processor because the number of files to be deleted was more than 20. This is a safety measure to ensure we don't accidently delete more files than expected."
                     )
                 self.s3_client.delete_objects(
                     Bucket=self.bucket_name,
