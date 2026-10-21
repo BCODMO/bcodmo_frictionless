@@ -105,7 +105,16 @@
     "bytes_sample_size": {},
     "allow_html": {},
     "workbook_cache": {},
-    "http_timeout": {}
+    "http_timeout": {},
+    "validate": {
+      "deprecated": true
+    },
+    "force_strings": {
+      "deprecated": true
+    },
+    "missing_values": {
+      "deprecated": true
+    }
   },
   "additionalProperties": false
 }

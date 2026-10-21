@@ -33,6 +33,9 @@
       "type": "object",
       "properties": {},
       "additionalProperties": true
+    },
+    "id": {
+      "deprecated": true
     }
   },
   "additionalProperties": false

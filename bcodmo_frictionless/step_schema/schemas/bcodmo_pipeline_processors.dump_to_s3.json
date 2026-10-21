@@ -36,6 +36,12 @@
       "type": "object",
       "properties": {},
       "additionalProperties": true
+    },
+    "dataset_id": {
+      "deprecated": true
+    },
+    "dataset_version": {
+      "deprecated": true
     }
   },
   "additionalProperties": false

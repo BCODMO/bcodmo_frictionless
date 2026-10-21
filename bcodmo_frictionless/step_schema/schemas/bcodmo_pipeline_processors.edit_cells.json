@@ -15,7 +15,8 @@
               "type": "object",
               "properties": {
                 "field": {},
-                "value": {}
+                "value": {},
+                "oldValue": {}
               },
               "additionalProperties": false
             }

@@ -142,3 +142,21 @@ class TestProblems:
 def test_schema_dir_is_packaged():
     assert os.path.isdir(SCHEMA_DIR)
     assert "bcodmo_pipeline_processors.load.json" in os.listdir(SCHEMA_DIR)
+
+
+class TestHistoricalKeys:
+    """Keys the 2026-10 audit of saved pipelines found and a human kept."""
+
+    def test_client_step_id_is_accepted_but_never_offered(self):
+        s = step("bcodmo_pipeline_processors.load", {"from": "x", "name": "a"}, id="s-abc")
+        assert check_steps([s]) == []
+        s["idd"] = 1
+        p = check_steps([s])[0]
+        assert "id" not in p.valid_keys
+
+    def test_edit_cells_old_value(self):
+        validate_step(step("bcodmo_pipeline_processors.edit_cells", {"resources": ["a"], "edited": [{"row": 1, "cells": [{"field": "x", "value": "1", "oldValue": "0"}]}]}))
+
+    def test_old_load_and_dump_keys(self):
+        validate_step(step("bcodmo_pipeline_processors.load", {"from": "x", "name": "a", "validate": True, "force_strings": True, "missing_values": [""]}))
+        validate_step(step("bcodmo_pipeline_processors.dump_to_s3", {"bucket_name": "b", "prefix": "p", "dataset_id": "1", "dataset_version": "1"}))
