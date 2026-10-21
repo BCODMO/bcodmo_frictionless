@@ -28,4 +28,7 @@ setup(
     packages=find_packages(),
     install_requires=required,
     include_package_data=True,
+    # The step key schemas (bcodmo_frictionless/step_schema/schemas/*.json)
+    # are data, not code; name them so a pip install from git ships them.
+    package_data={"bcodmo_frictionless.step_schema": ["schemas/*.json"]},
 )

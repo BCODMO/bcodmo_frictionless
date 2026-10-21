@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "load",
+  "type": "object",
+  "properties": {
+    "from": {},
+    "name": {},
+    "use_filename": {},
+    "format": {},
+    "input_separator": {},
+    "input_path_pattern": {},
+    "headers": {},
+    "multiline_headers_joiner": {},
+    "multiline_headers_duplicates": {},
+    "skip_rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "value": {},
+          "type": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "sample_size": {},
+    "limit_rows": {},
+    "limit_rows_loader": {},
+    "remove_empty_rows": {},
+    "ignore_blank_headers": {},
+    "deduplicate_headers": {},
+    "override_schema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "override_fields": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "recursion_limit": {},
+    "delimiter": {},
+    "sheet": {},
+    "sheet_regex": {},
+    "sheet_separator": {},
+    "preserve_formatting": {},
+    "adjust_floating_point_error": {},
+    "fill_merged_cells": {},
+    "infer": {},
+    "width": {},
+    "parse_seabird_header": {},
+    "seabird_capture_skipped_rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "column_name": {},
+          "regex": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "seabird_capture_skipped_rows_join": {},
+    "seabird_capture_skipped_rows_join_string": {},
+    "capture_skipped_rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "column_name": {},
+          "regex": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "capture_skipped_rows_join": {},
+    "capture_skipped_rows_join_string": {},
+    "s3_endpoint_url": {},
+    "encoding": {},
+    "compression": {},
+    "quotechar": {},
+    "escapechar": {},
+    "doublequote": {},
+    "skipinitialspace": {},
+    "lineterminator": {},
+    "infer_strategy": {},
+    "cast_strategy": {},
+    "scheme": {},
+    "cache_id": {},
+    "strip": {},
+    "on_error": {},
+    "extract_missing_values": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "fixedwidth_sample_size": {},
+    "fixedwidth_skip_header": {},
+    "pick_rows": {},
+    "pick_fields": {},
+    "skip_fields": {},
+    "ignore_listed_headers": {},
+    "ignore_not_listed_headers": {},
+    "bytes_sample_size": {},
+    "allow_html": {},
+    "workbook_cache": {},
+    "http_timeout": {}
+  },
+  "additionalProperties": false
+}

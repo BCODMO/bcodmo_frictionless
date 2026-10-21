@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "bcodmo_pipeline_processors.update_fields",
+  "type": "object",
+  "properties": {
+    "fields": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "bcodmo:": {
+            "type": "object",
+            "properties": {
+              "standard_name_id": {},
+              "is_primary": {},
+              "supplied_units": {},
+              "description": {},
+              "units": {}
+            },
+            "additionalProperties": false
+          },
+          "title": {},
+          "description": {},
+          "type": {},
+          "format": {},
+          "constraints": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "resources": {}
+  },
+  "additionalProperties": false
+}

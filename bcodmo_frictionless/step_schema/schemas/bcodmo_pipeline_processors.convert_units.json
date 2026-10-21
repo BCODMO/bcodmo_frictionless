@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "bcodmo_pipeline_processors.convert_units",
+  "type": "object",
+  "properties": {
+    "resources": {},
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {},
+          "conversion": {},
+          "preserve_field": {},
+          "new_field_name": {},
+          "preserve_metadata": {}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "duplicate",
+  "type": "object",
+  "properties": {
+    "source": {},
+    "target-name": {},
+    "target-path": {},
+    "batch_size": {},
+    "duplicate_to_end": {}
+  },
+  "additionalProperties": false
+}

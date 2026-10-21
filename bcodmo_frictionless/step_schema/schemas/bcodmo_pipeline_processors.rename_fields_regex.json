@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "bcodmo_pipeline_processors.rename_fields_regex",
+  "type": "object",
+  "properties": {
+    "fields": {},
+    "pattern": {
+      "type": "object",
+      "properties": {
+        "find": {},
+        "replace": {}
+      },
+      "additionalProperties": false
+    },
+    "resources": {}
+  },
+  "additionalProperties": false
+}

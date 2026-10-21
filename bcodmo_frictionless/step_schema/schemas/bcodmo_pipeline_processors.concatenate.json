@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "bcodmo_pipeline_processors.concatenate",
+  "type": "object",
+  "properties": {
+    "sources": {},
+    "target": {
+      "type": "object",
+      "properties": {
+        "name": {},
+        "path": {}
+      },
+      "additionalProperties": false
+    },
+    "fields": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "include_source_name": {},
+    "include_source_names": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {},
+          "column_name": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "source_field_name": {},
+    "missing_values": {},
+    "cache_id": {}
+  },
+  "additionalProperties": false
+}

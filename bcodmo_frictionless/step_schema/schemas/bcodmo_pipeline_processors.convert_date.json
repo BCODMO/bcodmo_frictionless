@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "bcodmo_pipeline_processors.convert_date",
+  "type": "object",
+  "properties": {
+    "resources": {},
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "input_type": {},
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {},
+                "format": {}
+              },
+              "additionalProperties": false
+            }
+          },
+          "input_field": {},
+          "output_field": {},
+          "output_format": {},
+          "output_type": {},
+          "input_timezone": {},
+          "input_timezone_utc_offset": {},
+          "output_timezone": {},
+          "output_timezone_utc_offset": {},
+          "year": {},
+          "decimal_year_start_day": {},
+          "preserve_metadata": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "boolean_statement": {}
+  },
+  "additionalProperties": false
+}

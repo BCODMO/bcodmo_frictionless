@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "bcodmo_pipeline_processors.set_types",
+  "type": "object",
+  "properties": {
+    "resources": {},
+    "regex": {},
+    "types": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "type": {},
+          "format": {},
+          "outputFormat": {},
+          "numberOutputFormat": {},
+          "constraints": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "decimalChar": {},
+          "groupChar": {},
+          "bareNumber": {},
+          "trueValues": {},
+          "falseValues": {},
+          "missingValues": {},
+          "title": {},
+          "description": {}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
