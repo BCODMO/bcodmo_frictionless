@@ -160,3 +160,12 @@ class TestHistoricalKeys:
     def test_old_load_and_dump_keys(self):
         validate_step(step("bcodmo_pipeline_processors.load", {"from": "x", "name": "a", "validate": True, "force_strings": True, "missing_values": [""]}))
         validate_step(step("bcodmo_pipeline_processors.dump_to_s3", {"bucket_name": "b", "prefix": "p", "dataset_id": "1", "dataset_version": "1"}))
+
+    def test_convert_date_single_field_form(self):
+        # input_field + input_format is the deprecated python form convert_date
+        # still runs (and requires input_format for); accepted, never offered.
+        s = step("bcodmo_pipeline_processors.convert_date", {"resources": ["a"], "fields": [{"input_type": "python", "input_field": "d", "input_format": "%Y", "output_field": "o", "output_format": "%Y"}]})
+        assert check_steps([s]) == []
+        s["parameters"]["fields"][0]["input_fmt"] = "%Y"
+        p = check_steps([s])[0]
+        assert "input_format" not in p.valid_keys

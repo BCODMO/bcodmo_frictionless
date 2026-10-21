@@ -31,7 +31,10 @@
           "output_timezone_utc_offset": {},
           "year": {},
           "decimal_year_start_day": {},
-          "preserve_metadata": {}
+          "preserve_metadata": {},
+          "input_format": {
+            "deprecated": true
+          }
         },
         "additionalProperties": false
       }
