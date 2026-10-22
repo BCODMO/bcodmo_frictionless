@@ -10,7 +10,7 @@
         "type": "object",
         "properties": {
           "operation": {},
-          "target": {},
+          "target": {"type": "string"},
           "source": {},
           "with": {}
         },
