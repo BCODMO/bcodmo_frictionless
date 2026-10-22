@@ -18,11 +18,17 @@ export DPP_PROCESSOR_PATH=/path/to/bcodmo_frictionless/bcodmo_frictionless/bcodm
 
 `bcodmo_frictionless.step_schema` is the one machine-readable description of
 each processor's parameters: `step_schema/schemas/<processor>.json`, a JSON
-Schema naming the keys a step may carry at every level (key names only, no
-types yet), plus `_step.json` for the step envelope. `validate_steps(steps)`
-raises `StepSchemaError` listing every unknown key in every step with
+Schema naming the keys a step may carry at every level, plus `_step.json`
+for the step envelope. Key names are what is checked; the only constraints
+enforced are `required` on an object and `minItems` / `maxItems` on an array
+(which also checks the list's `items.type`), declared where a shape the
+processor would accept is one the rest of the system cannot handle:
+`update_fields.resources` must be a one-element list, because the laminar
+editor shows one resource per step. `validate_steps(steps)` raises
+`StepSchemaError` listing every finding in every step: unknown keys with
 suggestions (a normalized spelling, the place the key is valid, a close
-match) and the keys valid at that level. laminar_server runs it on every
+match) and the keys valid at that level, and constraint findings with what
+was expected. laminar_server runs it on every
 pipeline run and history save, and bcodmo_submit_api's file_statistics
 Lambda before its load step. A processor without a schema fails
 laminar_server at import, so add the schema with the processor. Keys marked

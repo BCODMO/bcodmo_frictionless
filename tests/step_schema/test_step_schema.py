@@ -5,6 +5,8 @@ import pytest
 
 from bcodmo_frictionless.step_schema import (
     ALIASES,
+    CONSTRAINT,
+    UNKNOWN_KEY,
     SCHEMA_DIR,
     StepSchemaError,
     check_steps,
@@ -128,8 +130,8 @@ class TestProblems:
         assert [(p.path, p.key) for p in problems] == [("step.parameters.types.lat", "typo")]
 
     def test_non_dict_values_are_ignored(self):
-        # Key checks only: a list where an object is expected is the
-        # processor's error to report.
+        # Key checks only, outside a constrained array: a list where an
+        # object is expected is the processor's error to report.
         validate_step(step("bcodmo_pipeline_processors.load", {"from": "x", "name": "a", "skip_rows": "oops", "override_schema": 3}))
 
     def test_problem_as_dict_roundtrip(self):
@@ -169,3 +171,49 @@ class TestHistoricalKeys:
         s["parameters"]["fields"][0]["input_fmt"] = "%Y"
         p = check_steps([s])[0]
         assert "input_format" not in p.valid_keys
+
+
+class TestConstraints:
+    """update_fields.resources must be a one-element list of strings: the
+    laminar editor shows one resource per step, so a step for several (or for
+    all, when the key is absent) cannot be viewed or edited."""
+
+    def uf(self, **parameters):
+        return step("bcodmo_pipeline_processors.update_fields", {"fields": {}, **parameters})
+
+    def test_one_resource_is_clean(self):
+        assert check_steps([self.uf(resources=["a"])]) == []
+
+    def test_two_resources(self):
+        problems = check_steps([self.uf(resources=["a", "b"])])
+        assert len(problems) == 1
+        p = problems[0]
+        assert p.kind == CONSTRAINT and p.path == "step.parameters" and p.key == "resources"
+        assert p.message == '"resources" must list exactly 1 item, got 2'
+        assert str(p) == 'step 1 (bcodmo_pipeline_processors.update_fields): "resources" must list exactly 1 item, got 2 at step.parameters'
+        assert p.as_dict()["kind"] == CONSTRAINT and p.as_dict()["message"] == p.message
+
+    def test_missing_resources(self):
+        problems = check_steps([self.uf()])
+        assert [(p.kind, p.key, p.message) for p in problems] == [(CONSTRAINT, "resources", 'required key "resources" is missing')]
+
+    def test_empty_and_wrong_type(self):
+        assert [p.message for p in check_steps([self.uf(resources=[])])] == ['"resources" must list exactly 1 item, got 0']
+        assert [p.message for p in check_steps([self.uf(resources="a")])] == ['"resources" must be a list, got a string']
+        problems = check_steps([self.uf(resources=[1])])
+        assert [(p.path, p.key, p.message) for p in problems] == [("step.parameters.resources", "[0]", '"[0]" must be a string, got an integer')]
+
+    def test_validate_raises(self):
+        with pytest.raises(StepSchemaError) as e:
+            validate_steps([self.uf(resources=["a", "b"])])
+        assert "must list exactly 1 item" in str(e.value)
+
+    def test_unknown_keys_still_reported_alongside(self):
+        problems = check_steps([self.uf(resources=["a", "b"], bogus=1)])
+        assert sorted(p.kind for p in problems) == [CONSTRAINT, UNKNOWN_KEY]
+
+    def test_other_processors_unconstrained(self):
+        # Only update_fields declares the constraint; a multi-resource
+        # rename_fields and a resource-less set_types stay clean.
+        assert check_steps([step("bcodmo_pipeline_processors.rename_fields", {"resources": ["a", "b"], "fields": []})]) == []
+        assert check_steps([step("bcodmo_pipeline_processors.set_types", {"types": {}})]) == []

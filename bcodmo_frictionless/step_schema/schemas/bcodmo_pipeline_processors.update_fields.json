@@ -33,7 +33,13 @@
         "additionalProperties": false
       }
     },
-    "resources": {}
+    "resources": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "maxItems": 1
+    }
   },
+  "required": ["resources"],
   "additionalProperties": false
 }

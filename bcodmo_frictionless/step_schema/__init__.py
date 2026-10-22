@@ -8,10 +8,14 @@ Schema that names the keys a step may carry at every level, plus
 ``schemas/_step.json`` for the step envelope (``run``, ``parameters``, the
 annotation keys laminar_web and the LLM tooling add).
 
-Only key names are checked. Pipelines are never hand-edited; an unknown key
-comes from an LLM inventing one, and until now it passed through silently
-because most processors read their parameters with ``.get()`` and ignore the
-rest. Types and enums can be tightened later without changing the mechanism.
+Key names are checked everywhere, plus the few constraints a schema declares
+(``type``, ``required``, ``minItems``, ``maxItems``; see below). Pipelines are
+never hand-edited; an unknown key comes from an LLM inventing one, and until
+now it passed through silently because most processors read their parameters
+with ``.get()`` and ignore the rest. Constraints are declared only where a
+shape the processor accepts is one the rest of the system cannot handle:
+``update_fields.resources`` must list exactly one resource, because the
+laminar editor shows one resource per step.
 
 Schema conventions (a subset of JSON Schema draft-07):
 
@@ -24,6 +28,11 @@ Schema conventions (a subset of JSON Schema draft-07):
 * ``items`` is the schema of an array's elements.
 * ``deprecated: true`` on a property accepts the key but never suggests or
   lists it.
+* ``required`` on an object is enforced. ``minItems`` / ``maxItems`` on a
+  property make it a constrained array: it must then be a list of that
+  length, and its ``items.type`` (when declared) is checked. ``type``
+  anywhere else is documentation only, as it always was; everything else in
+  JSON Schema is ignored.
 
 Usage::
 
@@ -60,22 +69,33 @@ class StepSchemaError(Exception):
         super().__init__(format_problems(self.problems))
 
 
-class Problem:
-    """One unknown key: where it is, what it might have meant, what is valid."""
+UNKNOWN_KEY = "unknown_key"
+CONSTRAINT = "constraint"
 
-    def __init__(self, step_index, run, path, key, suggestions, valid_keys):
+
+class Problem:
+    """One finding: an unknown key (where it is, what it might have meant,
+    what is valid) or a constraint a declared key breaks (``kind`` is
+    ``CONSTRAINT`` and ``message`` says what; ``key`` is the offending
+    property, ``path`` its parent)."""
+
+    def __init__(self, step_index, run, path, key, suggestions, valid_keys, kind=UNKNOWN_KEY, message=None):
         self.step_index = step_index
         self.run = run
         self.path = path
         self.key = key
         self.suggestions = suggestions
         self.valid_keys = valid_keys
+        self.kind = kind
+        self.message = message
 
     @property
     def step_label(self):
         return f"step {self.step_index + 1} ({self.run})"
 
     def __str__(self):
+        if self.kind == CONSTRAINT:
+            return f"{self.step_label}: {self.message} at {self.path}"
         lines = [f'{self.step_label}: unknown key "{self.key}" at {self.path}']
         for s in self.suggestions:
             lines.append(f"  {s}")
@@ -93,6 +113,8 @@ class Problem:
             "key": self.key,
             "suggestions": list(self.suggestions),
             "valid_keys": list(self.valid_keys),
+            "kind": self.kind,
+            "message": self.message,
         }
 
 
@@ -200,8 +222,81 @@ def _index_paths(schema, path, acc):
     return acc
 
 
+_TYPES = {
+    "object": (dict, "an object"),
+    "array": (list, "a list"),
+    "string": (str, "a string"),
+    "number": ((int, float), "a number"),
+    "integer": (int, "an integer"),
+    "boolean": (bool, "true or false"),
+}
+
+
+def _type_name(value):
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "a boolean"
+    if isinstance(value, int):
+        return "an integer"
+    for name, (py, article) in _TYPES.items():
+        if name not in ("boolean", "integer") and isinstance(value, py):
+            return article
+    return type(value).__name__
+
+
+def _is_constrained(schema):
+    return "minItems" in schema or "maxItems" in schema
+
+
+def _type_ok(value, declared):
+    if declared not in _TYPES:
+        return True
+    py = _TYPES[declared][0]
+    if declared != "boolean" and isinstance(value, bool):
+        return False
+    return isinstance(value, py)
+
+
+def _constraints(value, schema, key):
+    """The messages a constrained array property `key` breaks: it must be a
+    list, of the declared length, of items of the declared type."""
+    if not isinstance(value, list):
+        yield f'"{key}" must be a list, got {_type_name(value)}'
+        return
+    lo, hi, n = schema.get("minItems"), schema.get("maxItems"), len(value)
+    if lo is not None and hi is not None and lo == hi and n != lo:
+        yield f'"{key}" must list exactly {lo} item{"" if lo == 1 else "s"}, got {n}'
+    elif lo is not None and n < lo:
+        yield f'"{key}" must list at least {lo} item{"" if lo == 1 else "s"}, got {n}'
+    elif hi is not None and n > hi:
+        yield f'"{key}" must list at most {hi} item{"" if hi == 1 else "s"}, got {n}'
+
+
+def _constraint(path, key, message):
+    return (CONSTRAINT, path, key, [], [], message)
+
+
+def _descend(child, schema, parent, key, child_path, elsewhere):
+    """Check the property `key` of `parent` (whose own path is child_path):
+    a constrained array's constraints and item types, then what is below."""
+    if isinstance(schema, dict) and _is_constrained(schema):
+        for message in _constraints(child, schema, key):
+            yield _constraint(parent, key, message)
+        if not isinstance(child, list):
+            return
+        items = schema.get("items")
+        declared = items.get("type") if isinstance(items, dict) else None
+        if isinstance(declared, str):
+            for i, item in enumerate(child):
+                if not _type_ok(item, declared):
+                    yield _constraint(child_path, f"[{i}]", f'"[{i}]" must be {_TYPES[declared][1]}, got {_type_name(item)}')
+    yield from _check(child, schema, child_path, elsewhere)
+
+
 def _check(value, schema, path, elsewhere) -> Iterator[tuple]:
-    """Walk value against schema, yielding (path, key, suggestions, valid)."""
+    """Walk value against schema, yielding
+    (kind, path, key, suggestions, valid, message) per finding."""
     if not isinstance(schema, dict):
         return
     if isinstance(value, dict):
@@ -211,16 +306,20 @@ def _check(value, schema, path, elsewhere) -> Iterator[tuple]:
             valid = _valid_keys(schema)
             for key, child in value.items():
                 if key in props:
-                    yield from _check(child, props[key], f"{path}.{key}", elsewhere)
+                    yield from _descend(child, props[key], path, key, f"{path}.{key}", elsewhere)
                 elif extra is True:
                     continue
                 elif isinstance(extra, dict):
-                    yield from _check(child, extra, f"{path}.{key}", elsewhere)
+                    yield from _descend(child, extra, path, key, f"{path}.{key}", elsewhere)
                 else:
-                    yield (path, key, _suggest(key, valid, elsewhere), valid)
+                    yield (UNKNOWN_KEY, path, key, _suggest(key, valid, elsewhere), valid, None)
         elif isinstance(extra, dict):
             for key, child in value.items():
-                yield from _check(child, extra, f"{path}.{key}", elsewhere)
+                yield from _descend(child, extra, path, key, f"{path}.{key}", elsewhere)
+        # Required keys last, so unknown keys (the common finding) lead.
+        for name in schema.get("required", ()):
+            if isinstance(name, str) and name not in value:
+                yield _constraint(path, name, f'required key "{name}" is missing')
     elif isinstance(value, list):
         items = schema.get("items")
         if isinstance(items, dict):
@@ -247,8 +346,8 @@ def check_step(step, step_index=0):
         combined["properties"]["parameters"] = processor
     elsewhere = _index_paths(combined, "step", {})
 
-    for path, key, suggestions, valid in _check(step, combined, "step", elsewhere):
-        problems.append(Problem(step_index, run_label, path, key, suggestions, valid))
+    for kind, path, key, suggestions, valid, message in _check(step, combined, "step", elsewhere):
+        problems.append(Problem(step_index, run_label, path, key, suggestions, valid, kind=kind, message=message))
     return problems
 
 
