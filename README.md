@@ -14,6 +14,33 @@ To run the dpp command locally using the custom processors located in this repos
 export DPP_PROCESSOR_PATH=/path/to/bcodmo_frictionless/bcodmo_frictionless/bcodmo_pipeline_processors
 ```
 
+## Step key validation
+
+`bcodmo_frictionless.step_schema` is the one machine-readable description of
+each processor's parameters: `step_schema/schemas/<processor>.json`, a JSON
+Schema naming the keys a step may carry at every level, plus `_step.json`
+for the step envelope. Key names are what is checked; the only constraints
+enforced are `required` on an object, `minItems` / `maxItems` on an array
+(which also checks the list's `items.type`) and a scalar `type` (`string`,
+`number`, `integer`, `boolean`) on a property, declared where a shape the
+processor would accept is one the rest of the system cannot handle:
+`update_fields.resources` must be a one-element list, because the laminar
+editor shows one resource per step. `validate_steps(steps)` raises
+`StepSchemaError` listing every finding in every step: unknown keys with
+suggestions (a normalized spelling, the place the key is valid, a close
+match) and the keys valid at that level, and constraint findings with what
+was expected. laminar_server runs it on every
+pipeline run and history save, and bcodmo_submit_api's file_statistics
+Lambda before its load step. A processor without a schema fails
+laminar_server at import, so add the schema with the processor. Keys marked
+`"deprecated": true` are accepted but never suggested. `python -m pytest
+tests/step_schema` covers it.
+
+Every load also records, per resource it produces, the file
+(`dpp:streamedFrom`) and the sheet (`bcodmo:loadedSheet`) it came from, so
+the output datapackage says where each resource came from even when one
+workbook became several resources.
+
 ## The BCO-DMO Processor Library
 
 See https://github.com/frictionlessdata/datapackage-pipelines for documentation on standard processors.

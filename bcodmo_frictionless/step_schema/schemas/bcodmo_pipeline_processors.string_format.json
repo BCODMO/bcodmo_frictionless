@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "bcodmo_pipeline_processors.string_format",
+  "type": "object",
+  "properties": {
+    "resources": {},
+    "boolean_statement": {},
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "input_fields": {},
+          "input_string": {},
+          "output_field": {}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

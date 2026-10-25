@@ -1,0 +1,10 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "bcodmo_pipeline_processors.boolean_filter_rows",
+  "type": "object",
+  "properties": {
+    "resources": {},
+    "boolean_statement": {}
+  },
+  "additionalProperties": false
+}

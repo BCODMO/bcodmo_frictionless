@@ -1,0 +1,10 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "bcodmo_pipeline_processors.reorder_fields",
+  "type": "object",
+  "properties": {
+    "fields": {},
+    "resources": {}
+  },
+  "additionalProperties": false
+}

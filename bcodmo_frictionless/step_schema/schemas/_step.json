@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "_step",
+  "type": "object",
+  "properties": {
+    "run": {},
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "cache": {},
+    "checkpoint": {
+      "deprecated": true
+    },
+    "bcodmo_notes": {},
+    "llm_notes": {},
+    "human_validated": {},
+    "submission_source": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "resource": {},
+          "submission_id": {},
+          "resource_id": {},
+          "filename": {},
+          "sheet_name": {},
+          "linked_by": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "parameter_mapper_result": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "id": {
+      "deprecated": true
+    }
+  },
+  "additionalProperties": false
+}

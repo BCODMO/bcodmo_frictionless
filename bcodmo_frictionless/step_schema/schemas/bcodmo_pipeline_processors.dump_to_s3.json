@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "bcodmo_pipeline_processors.dump_to_s3",
+  "type": "object",
+  "properties": {
+    "bucket_name": {},
+    "prefix": {},
+    "delete": {},
+    "dump_unique_lat_lon": {},
+    "force_format": {},
+    "force-format": {
+      "deprecated": true
+    },
+    "format": {},
+    "save_pipeline_spec": {},
+    "pipeline_spec": {},
+    "temporal_format_property": {},
+    "use_titles": {},
+    "submission_id": {},
+    "submission_ids": {},
+    "cache_id": {},
+    "limit_yield": {},
+    "data_manager": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "counters": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "add_filehash_to_path": {},
+    "pretty_descriptor": {},
+    "validator_options": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "dataset_id": {
+      "deprecated": true
+    },
+    "dataset_version": {
+      "deprecated": true
+    }
+  },
+  "additionalProperties": false
+}
