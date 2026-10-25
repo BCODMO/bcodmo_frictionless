@@ -814,3 +814,71 @@ def test_floating_point_error_2():
 
     assert len(rows) == 1
     assert str(rows[0][33]["ChlaYSI"]) == "1.23"
+
+
+@pytest.mark.skipif(TEST_DEV, reason="test development")
+def test_load_records_source_per_resource():
+    """Every resource a load adds states the file and sheet it came from.
+
+    A workbook loaded sheet by sheet is several resources from one file, so
+    the provenance is per resource, not per entry of `from`.
+    """
+    flows = [
+        load(
+            {
+                "from": "data/test.xlsx",
+                "name": "res",
+                "format": "xlsx",
+                "sheet": r"test\d",
+                "sheet_regex": True,
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    resources = datapackage.descriptor["resources"]
+    assert len(resources) == 4
+    for resource in resources:
+        assert resource["dpp:streamedFrom"] == "data/test.xlsx"
+        assert resource["dpp:streaming"] is True
+    # The sheet each resource came from is the sheet it is named after.
+    assert [r["bcodmo:loadedSheet"] for r in resources] == [
+        r["name"] for r in resources
+    ]
+    assert len(set(r["bcodmo:loadedSheet"] for r in resources)) == 4
+
+    # Several files with one name each: the source follows the file.
+    flows = [
+        load(
+            {
+                "from": ["data/test.csv", "data/test_regex.csv"],
+                "name": "a,b",
+                "format": "csv",
+                "infer_strategy": "strings",
+                "cast_strategy": "strings",
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    resources = datapackage.descriptor["resources"]
+    assert [r["name"] for r in resources] == ["a", "b"]
+    assert [r["dpp:streamedFrom"] for r in resources] == [
+        "data/test.csv",
+        "data/test_regex.csv",
+    ]
+    # A CSV has no sheet, so nothing is recorded for it.
+    assert all("bcodmo:loadedSheet" not in r for r in resources)
+
+    # A sheet selected by number is recorded as that number.
+    flows = [
+        load(
+            {
+                "from": "data/test.xlsx",
+                "name": "res",
+                "format": "xlsx",
+                "sheet": 2,
+            }
+        )
+    ]
+    rows, datapackage, _ = Flow(*flows).results()
+    resources = datapackage.descriptor["resources"]
+    assert resources[0]["bcodmo:loadedSheet"] == 2

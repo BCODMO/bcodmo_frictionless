@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "bcodmo_pipeline_processors.rename_fields",
+  "type": "object",
+  "properties": {
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "old_field": {},
+          "new_field": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "resources": {}
+  },
+  "additionalProperties": false
+}

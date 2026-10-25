@@ -10,6 +10,12 @@ from dataflows import Flow, load as standard_load
 
 PROP_STREAMED_FROM = "dpp:streamedFrom"
 PROP_STREAMING = "dpp:streaming"
+# The sheet a resource was loaded from, recorded next to dpp:streamedFrom so
+# the output datapackage states, per resource, exactly which (file, sheet) it
+# came from. Set only for resources loaded from a spreadsheet sheet; it is the
+# sheet as the load resolved it (a name when it was selected by name or regex,
+# an index when it was selected by number).
+PROP_LOADED_SHEET = "bcodmo:loadedSheet"
 
 
 # Imports for handling s3 excel sheet regex
@@ -142,17 +148,28 @@ def load(_from, parameters):
 
         return func
 
-    def mark_streaming(from_list):
+    def mark_streaming(load_sources, sheet_names):
+        """
+        Record where each new resource was loaded from.
+
+        load_sources and sheet_names are parallel to the resources this load
+        step adds (one entry per resource, not per file): a workbook loaded
+        sheet by sheet adds several resources from one file. Indexing the
+        from_list here instead used to attach dpp:streamedFrom to the wrong
+        resource, or to none, for any multi-sheet load.
+        """
+
         def func(package):
             for i in range(num_resources, len(package.pkg.resources)):
-                from_list_index = i - num_resources
-                if len(from_list) <= from_list_index:
+                source_index = i - num_resources
+                if len(load_sources) <= source_index:
                     continue
-                _from = from_list[from_list_index]
-                package.pkg.descriptor["resources"][i].setdefault(PROP_STREAMING, True)
-                package.pkg.descriptor["resources"][i].setdefault(
-                    PROP_STREAMED_FROM, _from
-                )
+                descriptor = package.pkg.descriptor["resources"][i]
+                descriptor.setdefault(PROP_STREAMING, True)
+                descriptor.setdefault(PROP_STREAMED_FROM, load_sources[source_index])
+                sheet_name = sheet_names[source_index]
+                if sheet_name not in (None, ""):
+                    descriptor.setdefault(PROP_LOADED_SHEET, sheet_name)
             yield package.pkg
             yield from package
 
@@ -421,7 +438,7 @@ def load(_from, parameters):
                 sheets=all_sheet_names,
                 **parameters,
             ),
-            mark_streaming(from_list),
+            mark_streaming(load_sources, all_sheet_names),
         ]
     )
     if _remove_empty_rows:

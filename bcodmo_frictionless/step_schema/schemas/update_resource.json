@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "update_resource",
+  "type": "object",
+  "properties": {
+    "resources": {},
+    "metadata": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

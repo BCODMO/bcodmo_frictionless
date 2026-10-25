@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "bcodmo_pipeline_processors.boolean_add_computed_field",
+  "type": "object",
+  "properties": {
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "target": {},
+          "type": {},
+          "functions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "always_run": {},
+                "boolean": {},
+                "value": {},
+                "math_operation": {}
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "resources": {}
+  },
+  "additionalProperties": false
+}

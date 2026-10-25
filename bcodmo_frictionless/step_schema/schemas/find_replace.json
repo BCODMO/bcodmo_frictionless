@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "find_replace",
+  "type": "object",
+  "properties": {
+    "resources": {},
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {},
+          "patterns": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "find": {},
+                "replace": {}
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

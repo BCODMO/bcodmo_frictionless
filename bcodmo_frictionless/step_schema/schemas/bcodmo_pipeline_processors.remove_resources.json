@@ -1,0 +1,10 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "bcodmo_pipeline_processors.remove_resources",
+  "type": "object",
+  "properties": {
+    "resources": {},
+    "cache_id": {}
+  },
+  "additionalProperties": false
+}
