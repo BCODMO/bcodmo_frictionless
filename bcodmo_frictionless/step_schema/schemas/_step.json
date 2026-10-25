@@ -10,7 +10,9 @@
       "additionalProperties": true
     },
     "cache": {},
-    "checkpoint": {},
+    "checkpoint": {
+      "deprecated": true
+    },
     "bcodmo_notes": {},
     "llm_notes": {},
     "human_validated": {},

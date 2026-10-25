@@ -156,6 +156,17 @@ class TestHistoricalKeys:
         p = check_steps([s])[0]
         assert "id" not in p.valid_keys
 
+    def test_checkpoint_is_accepted_but_never_offered(self):
+        # Checkpoints are disabled; laminar_server strips the flag before a
+        # run. Old pipelines still carry it, so it is accepted, but it is not
+        # something to suggest.
+        s = step("bcodmo_pipeline_processors.load", {"from": "x", "name": "a"}, checkpoint=True)
+        assert check_steps([s]) == []
+        s["checkpoints"] = True
+        p = check_steps([s])[0]
+        assert "checkpoint" not in p.valid_keys
+        assert not any("checkpoint" in sug for sug in p.suggestions)
+
     def test_edit_cells_old_value(self):
         validate_step(step("bcodmo_pipeline_processors.edit_cells", {"resources": ["a"], "edited": [{"row": 1, "cells": [{"field": "x", "value": "1", "oldValue": "0"}]}]}))
 
