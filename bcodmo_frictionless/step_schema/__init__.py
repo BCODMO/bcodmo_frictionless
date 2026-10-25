@@ -14,8 +14,10 @@ never hand-edited; an unknown key comes from an LLM inventing one, and until
 now it passed through silently because most processors read their parameters
 with ``.get()`` and ignore the rest. Constraints are declared only where a
 shape the processor accepts is one the rest of the system cannot handle:
-``update_fields.resources`` must list exactly one resource, because the
-laminar editor shows one resource per step.
+``update_fields.resources`` may list at most one resource, because the
+laminar editor shows one resource per step (none is a step the editor has
+not been given a resource yet; saving it must still work, and running it
+touches nothing).
 
 Schema conventions (a subset of JSON Schema draft-07):
 

@@ -200,8 +200,8 @@ class TestConstraints:
         assert len(problems) == 1
         p = problems[0]
         assert p.kind == CONSTRAINT and p.path == "step.parameters" and p.key == "resources"
-        assert p.message == '"resources" must list exactly 1 item, got 2'
-        assert str(p) == 'step 1 (bcodmo_pipeline_processors.update_fields): "resources" must list exactly 1 item, got 2 at step.parameters'
+        assert p.message == '"resources" must list at most 1 item, got 2'
+        assert str(p) == 'step 1 (bcodmo_pipeline_processors.update_fields): "resources" must list at most 1 item, got 2 at step.parameters'
         assert p.as_dict()["kind"] == CONSTRAINT and p.as_dict()["message"] == p.message
 
     def test_missing_resources(self):
@@ -209,7 +209,9 @@ class TestConstraints:
         assert [(p.kind, p.key, p.message) for p in problems] == [(CONSTRAINT, "resources", 'required key "resources" is missing')]
 
     def test_empty_and_wrong_type(self):
-        assert [p.message for p in check_steps([self.uf(resources=[])])] == ['"resources" must list exactly 1 item, got 0']
+        # No resource yet: laminar_web's new update_fields step is saved like
+        # this on every autosave until a resource is picked.
+        assert check_steps([self.uf(resources=[])]) == []
         assert [p.message for p in check_steps([self.uf(resources="a")])] == ['"resources" must be a list, got a string']
         problems = check_steps([self.uf(resources=[1])])
         assert [(p.path, p.key, p.message) for p in problems] == [("step.parameters.resources", "[0]", '"[0]" must be a string, got an integer')]
@@ -217,7 +219,7 @@ class TestConstraints:
     def test_validate_raises(self):
         with pytest.raises(StepSchemaError) as e:
             validate_steps([self.uf(resources=["a", "b"])])
-        assert "must list exactly 1 item" in str(e.value)
+        assert "must list at most 1 item" in str(e.value)
 
     def test_unknown_keys_still_reported_alongside(self):
         problems = check_steps([self.uf(resources=["a", "b"], bogus=1)])
