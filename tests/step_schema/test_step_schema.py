@@ -212,6 +212,26 @@ class TestConstraints:
         problems = check_steps([self.uf(resources=["a", "b"], bogus=1)])
         assert sorted(p.kind for p in problems) == [CONSTRAINT, UNKNOWN_KEY]
 
+    def test_scalar_type_on_a_property_is_enforced(self):
+        # add_computed_field accepts a {name, type} target, but laminar's step
+        # editor shows target in a text input, so the object form is refused.
+        def acf(target):
+            return step("add_computed_field", {"fields": [{"operation": "format", "target": target, "with": "a"}]})
+
+        assert check_steps([acf("x")]) == []
+        problems = check_steps([acf({"name": "x", "type": "string"})])
+        assert [(p.kind, p.path, p.key, p.message) for p in problems] == [
+            (CONSTRAINT, "step.parameters.fields[0]", "target", '"target" must be a string, got an object')
+        ]
+        assert [p.message for p in check_steps([acf(3)])] == ['"target" must be a string, got an integer']
+        with pytest.raises(StepSchemaError, match="must be a string"):
+            validate_steps([acf({"name": "x"})])
+
+    def test_object_and_array_types_stay_documentation(self):
+        # load.override_schema declares type object; a number there is the
+        # processor's error to report, not a schema finding.
+        assert check_steps([step("bcodmo_pipeline_processors.load", {"from": "x", "name": "a", "override_schema": 3})]) == []
+
     def test_other_processors_unconstrained(self):
         # Only update_fields declares the constraint; a multi-resource
         # rename_fields and a resource-less set_types stay clean.

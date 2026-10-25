@@ -30,9 +30,13 @@ Schema conventions (a subset of JSON Schema draft-07):
   lists it.
 * ``required`` on an object is enforced. ``minItems`` / ``maxItems`` on a
   property make it a constrained array: it must then be a list of that
-  length, and its ``items.type`` (when declared) is checked. ``type``
-  anywhere else is documentation only, as it always was; everything else in
-  JSON Schema is ignored.
+  length, and its ``items.type`` (when declared) is checked. A scalar
+  ``type`` (``string``, ``number``, ``integer``, ``boolean``) on a property
+  is enforced too: ``add_computed_field.fields[].target`` must be a string
+  because laminar's step editor shows it in a text input. ``object`` and
+  ``array`` stay documentation only, as they always were (a list where an
+  object is expected is the processor's error to report); everything else
+  in JSON Schema is ignored.
 
 Usage::
 
@@ -249,6 +253,12 @@ def _is_constrained(schema):
     return "minItems" in schema or "maxItems" in schema
 
 
+# The declared types that are enforced on a property. object and array are
+# documentation only: many schemas declare them on levels whose shape the
+# processor itself reports on, and saved pipelines rely on that leniency.
+_SCALAR_TYPES = ("string", "number", "integer", "boolean")
+
+
 def _type_ok(value, declared):
     if declared not in _TYPES:
         return True
@@ -279,7 +289,13 @@ def _constraint(path, key, message):
 
 def _descend(child, schema, parent, key, child_path, elsewhere):
     """Check the property `key` of `parent` (whose own path is child_path):
-    a constrained array's constraints and item types, then what is below."""
+    a declared scalar type, a constrained array's constraints and item types,
+    then what is below."""
+    if isinstance(schema, dict):
+        declared = schema.get("type")
+        if declared in _SCALAR_TYPES and not _type_ok(child, declared):
+            yield _constraint(parent, key, f'"{key}" must be {_TYPES[declared][1]}, got {_type_name(child)}')
+            return
     if isinstance(schema, dict) and _is_constrained(schema):
         for message in _constraints(child, schema, key):
             yield _constraint(parent, key, message)
